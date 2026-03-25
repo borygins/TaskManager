@@ -9,10 +9,12 @@ from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, 
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.deps import get_boss_user, get_current_user
 from app.core.config import settings
+from app.core.security import hash_password
 from app.db.session import SessionLocal, init_db
 from app.models import User
 from app.services.auth import authenticate_user
@@ -128,6 +130,78 @@ async def dashboard(
             "activities": activities[:12],
         },
     )
+
+
+@app.get("/boss/users", response_class=HTMLResponse)
+async def boss_users_page(
+    request: Request,
+    current_user: User = Depends(get_boss_user),
+) -> HTMLResponse:
+    async with SessionLocal() as session:
+        user = await session.get(User, current_user.id)
+        users = list((await session.execute(select(User).order_by(User.role.desc(), User.full_name.asc()))).scalars())
+    return render(
+        request,
+        "boss_users.html",
+        {
+            "current_user": user,
+            "users": users,
+            "create_error": None,
+            "create_success": None,
+        },
+    )
+
+
+@app.post("/boss/users")
+async def create_boss_user(
+    request: Request,
+    current_user: User = Depends(get_boss_user),
+) -> Response:
+    form = await request.form()
+    employee_id = str(form.get("employee_id", "")).strip()
+    full_name = str(form.get("full_name", "")).strip()
+    role = str(form.get("role", "manager")).strip()
+
+    async with SessionLocal() as session:
+        user = await session.get(User, current_user.id)
+        users = list((await session.execute(select(User).order_by(User.role.desc(), User.full_name.asc()))).scalars())
+
+        if not employee_id or not full_name or role not in {"boss", "manager"}:
+            return render(
+                request,
+                "boss_users.html",
+                {
+                    "current_user": user,
+                    "users": users,
+                    "create_error": "Заполните табельный номер, ФИО и корректную роль.",
+                    "create_success": None,
+                },
+            )
+
+        existing = (await session.execute(select(User).where(User.employee_id == employee_id))).scalar_one_or_none()
+        if existing:
+            return render(
+                request,
+                "boss_users.html",
+                {
+                    "current_user": user,
+                    "users": users,
+                    "create_error": "Пользователь с таким табельным номером уже существует.",
+                    "create_success": None,
+                },
+            )
+
+        session.add(
+            User(
+                employee_id=employee_id,
+                full_name=full_name,
+                role=role,
+                password_hash=hash_password(employee_id),
+            )
+        )
+        await session.commit()
+
+    return RedirectResponse("/boss/users?created=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/funnels/{funnel_id}", response_class=HTMLResponse)

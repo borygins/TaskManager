@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+    <div>
+        <div class="badge">Начальник</div>
+        <h1>Пользователи</h1>
+        <p class="muted">Создание новых учетных записей для менеджеров и руководителей.</p>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Новый пользователь</h2>
+    </div>
+    {% if create_error %}
+    <div class="error-box">{{ create_error }}</div>
+    {% endif %}
+    {% if request.query_params.get('created') == '1' %}
+    <div class="hint">Пользователь создан. Стартовый пароль равен его табельному номеру.</div>
+    {% endif %}
+    <form method="post" action="/boss/users" class="filter-grid filter-grid-wide">
+        <label>
+            <span>Табельный номер</span>
+            <input type="text" name="employee_id" required>
+        </label>
+        <label>
+            <span>ФИО</span>
+            <input type="text" name="full_name" required>
+        </label>
+        <label>
+            <span>Роль</span>
+            <select name="role" required>
+                <option value="manager">Менеджер</option>
+                <option value="boss">Руководитель</option>
+            </select>
+        </label>
+        <div class="filter-actions">
+            <button type="submit">Создать пользователя</button>
+        </div>
+    </form>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Текущие пользователи</h2>
+    </div>
+    <div class="row-list-body">
+        {% for user in users %}
+        <div class="row-item user-row-grid">
+            <div><strong>{{ user.full_name }}</strong></div>
+            <div class="muted">Табельный: {{ user.employee_id }}</div>
+            <div><span class="tag">{{ 'Руководитель' if user.role == 'boss' else 'Менеджер' }}</span></div>
+            <div class="muted">Создан: {{ user.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+        </div>
+        {% else %}
+        <div class="empty-state">Пользователей пока нет.</div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

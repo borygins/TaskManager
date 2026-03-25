@@ -292,6 +292,13 @@ textarea {
     align-items: center;
 }
 
+.user-row-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 0.9fr 1fr;
+    gap: 12px;
+    align-items: center;
+}
+
 .row-eye-cell {
     display: flex;
     justify-content: center;
@@ -346,8 +353,9 @@ textarea {
 }
 
 @media (max-width: 1200px) {
-    .row-list-grid {
-        grid-template-columns: 1fr 1.2fr 1fr 1.5fr 1fr 72px;
+    .row-list-grid,
+    .user-row-grid {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -365,7 +373,8 @@ textarea {
         display: none;
     }
 
-    .row-list-grid {
+    .row-list-grid,
+    .user-row-grid {
         grid-template-columns: 1fr;
     }
 

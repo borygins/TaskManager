@@ -21,6 +21,7 @@
                 <a href="/export">Выгрузить Excel</a>
                 {% if current_user.role == "boss" %}
                 <a href="/boss/distribution">Распределение клиентов</a>
+                <a href="/boss/users">Пользователи</a>
                 <a href="/import/template">Шаблон импорта</a>
                 <form action="/import" method="post" enctype="multipart/form-data" class="import-form">
                     <label class="file-label">
