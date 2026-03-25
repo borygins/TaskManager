@@ -46,6 +46,7 @@ class Client(Base):
     manager_notes: Mapped[str] = mapped_column(Text, default="")
     last_call_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     next_call_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    last_manager_activity_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(64), default="Поиск контакта")
     monthly_turnover: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     mcc_code: Mapped[str] = mapped_column(String(32), default="")

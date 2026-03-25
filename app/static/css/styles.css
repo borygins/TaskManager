@@ -224,6 +224,11 @@ textarea {
     gap: 12px;
 }
 
+.activity-body {
+    white-space: pre-line;
+    line-height: 1.5;
+}
+
 .comment-item + .comment-item,
 .activity-item + .activity-item {
     margin-top: 12px;

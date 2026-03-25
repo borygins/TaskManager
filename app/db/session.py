@@ -38,4 +38,10 @@ async def init_db() -> None:
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+        columns = {
+            row[1]
+            for row in (await connection.execute(text("PRAGMA table_info(clients)"))).fetchall()
+        }
+        if "last_manager_activity_date" not in columns:
+            await connection.execute(text("ALTER TABLE clients ADD COLUMN last_manager_activity_date DATE"))
         await connection.execute(text("PRAGMA wal_checkpoint(TRUNCATE);"))

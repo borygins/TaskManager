@@ -19,8 +19,8 @@
                 <a href="/dashboard">Главная</a>
                 <a href="/activity">Активность за сегодня</a>
                 <a href="/export">Выгрузить Excel</a>
-                <a href="/import/template">Шаблон импорта</a>
                 {% if current_user.role == "boss" %}
+                <a href="/import/template">Шаблон импорта</a>
                 <form action="/import" method="post" enctype="multipart/form-data" class="import-form">
                     <label class="file-label">
                         <span>Импорт Excel</span>

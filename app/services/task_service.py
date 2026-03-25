@@ -26,6 +26,46 @@ def parse_decimal(raw_value: str | None) -> Decimal | None:
         return None
 
 
+def build_change_message(label: str, old_value: object, new_value: object) -> str:
+    old_text = "" if old_value is None else str(old_value)
+    new_text = "" if new_value is None else str(new_value)
+    return f"{label}: {old_text} -> {new_text}" if old_text else f"{label}: {new_text}"
+
+
+async def append_daily_activity(client_id: int, actor: User, changes: list[str], session: AsyncSession) -> None:
+    if not changes:
+        return
+
+    now = datetime.now()
+    start = datetime.combine(now.date(), time.min)
+    end = datetime.combine(now.date(), time.max)
+    result = await session.execute(
+        select(ActivityLog)
+        .where(ActivityLog.client_id == client_id, ActivityLog.created_at >= start, ActivityLog.created_at <= end)
+        .order_by(ActivityLog.created_at.desc())
+        .limit(1)
+    )
+    log = result.scalar_one_or_none()
+    chunk = "\n".join(f"{now.strftime('%H:%M')} - {actor.full_name}: {change}" for change in changes)
+
+    if log:
+        log.new_value = f"{log.new_value}\n{chunk}" if log.new_value else chunk
+        log.actor_id = actor.id
+        log.created_at = now
+        return
+
+    session.add(
+        ActivityLog(
+            client_id=client_id,
+            actor_id=actor.id,
+            field_name="daily_summary",
+            previous_value="",
+            new_value=chunk,
+            created_at=now,
+        )
+    )
+
+
 async def get_funnels(session: AsyncSession) -> list[Funnel]:
     result = await session.execute(select(Funnel).order_by(Funnel.name))
     return list(result.scalars())
@@ -100,48 +140,38 @@ async def update_client_task(
     actor: User,
     session: AsyncSession,
 ) -> None:
-    tracked_fields = {
-        "status": ("status", form_data.get("status", "").strip()),
-        "phone": ("phone", form_data.get("phone", "").strip()),
-        "last_call_date": ("last_call_date", parse_optional_date(form_data.get("last_call_date"))),
-        "next_call_date": ("next_call_date", parse_optional_date(form_data.get("next_call_date"))),
-        "manager_notes": ("manager_notes", form_data.get("manager_notes", "").strip()),
-        "company_name": ("company_name", form_data.get("company_name", "").strip()),
-        "monthly_turnover": ("monthly_turnover", parse_decimal(form_data.get("monthly_turnover"))),
-        "mcc_code": ("mcc_code", form_data.get("mcc_code", "").strip()),
-        "competitor_bank": ("competitor_bank", form_data.get("competitor_bank", "").strip()),
-        "registration_address": ("registration_address", form_data.get("registration_address", "").strip()),
-    }
+    tracked_fields = [
+        ("status", "status", "Статус", lambda value: value.strip()),
+        ("phone", "phone", "Телефон", lambda value: value.strip()),
+        ("last_call_date", "last_call_date", "Дата звонка", parse_optional_date),
+        ("next_call_date", "next_call_date", "Следующая дата звонка", parse_optional_date),
+        ("manager_notes", "manager_notes", "Комментарий менеджера", lambda value: value.strip()),
+        ("company_name", "company_name", "Организация", lambda value: value.strip()),
+        ("monthly_turnover", "monthly_turnover", "Оборот в месяц", parse_decimal),
+        ("mcc_code", "mcc_code", "MCC", lambda value: value.strip()),
+        ("competitor_bank", "competitor_bank", "Банк-конкурент", lambda value: value.strip()),
+        ("registration_address", "registration_address", "Адрес регистрации", lambda value: value.strip()),
+    ]
 
-    for field_name, (attribute, new_value) in tracked_fields.items():
+    changes: list[str] = []
+
+    for form_key, attribute, label, parser in tracked_fields:
+        if form_key not in form_data:
+            continue
+        raw_value = form_data.get(form_key)
+        new_value = parser(raw_value)
         old_value = getattr(client, attribute)
         old_text = "" if old_value is None else str(old_value)
         new_text = "" if new_value is None else str(new_value)
         if old_text == new_text:
             continue
         setattr(client, attribute, new_value)
-        session.add(
-            ActivityLog(
-                client_id=client.id,
-                actor_id=actor.id,
-                field_name=field_name,
-                previous_value=old_text,
-                new_value=new_text,
-            )
-        )
+        changes.append(build_change_message(label=label, old_value=old_value, new_value=new_value))
 
     comment_body = form_data.get("comment_body", "").strip()
     if comment_body:
         session.add(Comment(client_id=client.id, author_id=actor.id, body=comment_body))
-        session.add(
-            ActivityLog(
-                client_id=client.id,
-                actor_id=actor.id,
-                field_name="comment",
-                previous_value="",
-                new_value=comment_body,
-            )
-        )
+        changes.append(f"Комментарий: {comment_body}")
 
     manager_id_raw = form_data.get("assigned_manager_id")
     if actor.role == "boss" and manager_id_raw:
@@ -151,15 +181,17 @@ async def update_client_task(
             old_manager = await session.get(User, old_manager_id) if old_manager_id else None
             new_manager = await session.get(User, new_manager_id)
             client.assigned_manager_id = new_manager_id
-            session.add(
-                ActivityLog(
-                    client_id=client.id,
-                    actor_id=actor.id,
-                    field_name="assigned_manager",
-                    previous_value=old_manager.full_name if old_manager else "",
+            changes.append(
+                build_change_message(
+                    label="Ответственный менеджер",
+                    old_value=old_manager.full_name if old_manager else "",
                     new_value=new_manager.full_name if new_manager else "",
                 )
             )
+
+    if changes:
+        client.last_manager_activity_date = date.today()
+        await append_daily_activity(client_id=client.id, actor=actor, changes=changes, session=session)
 
 
 async def get_dashboard_stats(current_user: User, session: AsyncSession) -> dict[str, int]:
@@ -199,6 +231,9 @@ def client_to_export_row(client: Client) -> dict[str, str]:
         "Комментарий менеджера": client.manager_notes,
         "Дата звонка": client.last_call_date.isoformat() if client.last_call_date else "",
         "Следующая дата звонка": client.next_call_date.isoformat() if client.next_call_date else "",
+        "Дата последней активности менеджера": (
+            client.last_manager_activity_date.isoformat() if client.last_manager_activity_date else ""
+        ),
         "Статус": client.status,
         "Оборот в месяц": str(client.monthly_turnover or ""),
         "MCC": client.mcc_code,

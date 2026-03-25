@@ -12,9 +12,9 @@
     <div class="activity-list">
         {% for item in activities %}
         <div class="activity-item">
-            <div><strong>{{ item.client.full_name }}</strong> • {{ item.field_name }}</div>
-            <div class="muted">{{ item.previous_value }} → {{ item.new_value }}</div>
-            <div class="muted">{{ item.actor.full_name }} • {{ item.created_at.strftime("%d.%m.%Y %H:%M") }}</div>
+            <div><strong>{{ item.client.full_name }}</strong></div>
+            <div class="muted activity-body">{{ item.new_value }}</div>
+            <div class="muted">Последнее обновление: {{ item.created_at.strftime("%d.%m.%Y %H:%M") }}</div>
         </div>
         {% else %}
         <div class="empty-state">Сегодня изменений пока нет.</div>

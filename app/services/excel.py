@@ -18,6 +18,7 @@ EXPORT_HEADERS = [
     "Комментарий менеджера",
     "Дата звонка",
     "Следующая дата звонка",
+    "Дата последней активности менеджера",
     "Статус",
     "Оборот в месяц",
     "MCC",
@@ -77,6 +78,11 @@ async def import_clients_from_excel(file_bytes: bytes, session: AsyncSession) ->
             manager_result = await session.execute(select(User).where(User.employee_id == manager_employee_id))
             manager = manager_result.scalar_one_or_none()
 
+        last_activity_column = header_index.get("Дата последней активности менеджера")
+        last_activity_date = None
+        if last_activity_column is not None:
+            last_activity_date = parse_optional_date(str(raw_row[last_activity_column] or "").strip())
+
         result = await session.execute(select(Client).where(Client.tax_number == tax_number))
         client = result.scalar_one_or_none()
         is_new = client is None
@@ -89,6 +95,7 @@ async def import_clients_from_excel(file_bytes: bytes, session: AsyncSession) ->
                 manager_notes=str(raw_row[header_index["Комментарий менеджера"]] or "").strip(),
                 last_call_date=parse_optional_date(str(raw_row[header_index["Дата звонка"]] or "").strip()),
                 next_call_date=parse_optional_date(str(raw_row[header_index["Следующая дата звонка"]] or "").strip()),
+                last_manager_activity_date=last_activity_date,
                 status=str(raw_row[header_index["Статус"]] or "Поиск контакта").strip(),
                 monthly_turnover=parse_decimal(str(raw_row[header_index["Оборот в месяц"]] or "").strip()),
                 mcc_code=str(raw_row[header_index["MCC"]] or "").strip(),
@@ -106,6 +113,7 @@ async def import_clients_from_excel(file_bytes: bytes, session: AsyncSession) ->
             client.manager_notes = str(raw_row[header_index["Комментарий менеджера"]] or "").strip()
             client.last_call_date = parse_optional_date(str(raw_row[header_index["Дата звонка"]] or "").strip())
             client.next_call_date = parse_optional_date(str(raw_row[header_index["Следующая дата звонка"]] or "").strip())
+            client.last_manager_activity_date = last_activity_date
             client.status = str(raw_row[header_index["Статус"]] or "Поиск контакта").strip()
             client.monthly_turnover = parse_decimal(str(raw_row[header_index["Оборот в месяц"]] or "").strip())
             client.mcc_code = str(raw_row[header_index["MCC"]] or "").strip()
@@ -147,6 +155,7 @@ def build_import_template() -> bytes:
             "Первичный контакт",
             "2026-03-25",
             "2026-03-28",
+            "2026-03-25",
             "Поиск контакта",
             "1500000",
             "5411",
