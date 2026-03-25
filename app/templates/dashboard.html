@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+    <div>
+        <div class="badge">Продажные кампании</div>
+        <h1>Панель управления</h1>
+        <p class="muted">Воронки общие для всех, а клиенты закреплены строго за одним менеджером. Клиент может участвовать в нескольких кампаниях одновременно.</p>
+    </div>
+</section>
+
+<section class="stats-grid">
+    <div class="stat-card">
+        <div class="muted">Клиентов в работе</div>
+        <strong>{{ stats.total_clients }}</strong>
+    </div>
+    <div class="stat-card">
+        <div class="muted">Воронок</div>
+        <strong>{{ stats.total_funnels }}</strong>
+    </div>
+    <div class="stat-card">
+        <div class="muted">Клиентов в нескольких воронках</div>
+        <strong>{{ stats.multi_funnel }}</strong>
+    </div>
+    <div class="stat-card">
+        <div class="muted">Изменений сегодня</div>
+        <strong>{{ stats.activity_today }}</strong>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Воронки</h2>
+    </div>
+    <div class="funnel-grid">
+        {% for funnel in funnels %}
+        <a class="funnel-card" href="/funnels/{{ funnel.id }}">
+            <div class="badge">Кампания</div>
+            <h3>{{ funnel.name }}</h3>
+            <p class="muted">{{ funnel.description or "Рабочая воронка продаж" }}</p>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Последняя активность за сегодня</h2>
+    </div>
+    <div class="activity-list">
+        {% for item in activities %}
+        <div class="activity-item">
+            <div><strong>{{ item.client.full_name }}</strong> • {{ item.field_name }}</div>
+            <div class="muted">{{ item.previous_value }} → {{ item.new_value }}</div>
+            <div class="muted">{{ item.actor.full_name }} • {{ item.created_at.strftime("%d.%m.%Y %H:%M") }}</div>
+        </div>
+        {% else %}
+        <div class="empty-state">Сегодня изменений пока нет.</div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

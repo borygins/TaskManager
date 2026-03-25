@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+    <div>
+        <div class="badge">Контроль</div>
+        <h1>Активность за сегодня</h1>
+        <p class="muted">Здесь видно изменения статусов, комментариев, дат звонков и переназначений.</p>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="activity-list">
+        {% for item in activities %}
+        <div class="activity-item">
+            <div><strong>{{ item.client.full_name }}</strong> • {{ item.field_name }}</div>
+            <div class="muted">{{ item.previous_value }} → {{ item.new_value }}</div>
+            <div class="muted">{{ item.actor.full_name }} • {{ item.created_at.strftime("%d.%m.%Y %H:%M") }}</div>
+        </div>
+        {% else %}
+        <div class="empty-state">Сегодня изменений пока нет.</div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title if title else "Sales Task Manager" }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/styles.css') }}">
+    <script defer src="{{ url_for('static', path='js/app.js') }}"></script>
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div>
+                <div class="brand">Sales Task Manager</div>
+                <p class="brand-caption">Темный интерфейс для продаж, задач и контроля активности.</p>
+            </div>
+            {% if current_user %}
+            <nav class="nav">
+                <a href="/dashboard">Главная</a>
+                <a href="/activity">Активность за сегодня</a>
+                <a href="/export">Выгрузить Excel</a>
+                <a href="/import/template">Шаблон импорта</a>
+                {% if current_user.role == "boss" %}
+                <form action="/import" method="post" enctype="multipart/form-data" class="import-form">
+                    <label class="file-label">
+                        <span>Импорт Excel</span>
+                        <input type="file" name="file" accept=".xlsx" required>
+                    </label>
+                    <button type="submit">Загрузить</button>
+                </form>
+                <form action="/backup" method="post">
+                    <button type="submit">Создать бэкап</button>
+                </form>
+                {% endif %}
+            </nav>
+            <div class="user-card">
+                <div class="muted">Пользователь</div>
+                <div>{{ current_user.full_name }}</div>
+                <div class="muted">Табельный: {{ current_user.employee_id }}</div>
+                <div class="muted">Роль: {{ current_user.role }}</div>
+                <a class="logout-link" href="/logout">Выйти</a>
+            </div>
+            {% endif %}
+        </aside>
+        <main class="content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</body>
+</html>

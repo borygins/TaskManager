@@ -1,0 +1,10 @@
+.venv/
+.idea/
+__pycache__/
+*.pyc
+*.docx
+*.tmp
+task_manager.sqlite3
+task_manager.sqlite3-*
+backups/
+app/static/uploads/
