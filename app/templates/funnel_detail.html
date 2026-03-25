@@ -40,6 +40,7 @@
         <div>Организация</div>
         <div>Статус</div>
         <div>Последний комментарий</div>
+        <div>Воронка продаж</div>
         <div>Последняя активность</div>
         <div class="row-eye-cell">Карточка</div>
     </div>
@@ -50,6 +51,7 @@
             <div>{{ client.company_name or 'Не указана' }}</div>
             <div><span class="tag">{{ client.status }}</span></div>
             <div class="comment-preview">{{ client.comments[-1].body if client.comments else 'Комментариев пока нет' }}</div>
+            <div class="comment-preview">{% for link in client.funnel_links %}{{ link.funnel.name }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
             <div>{{ client.last_manager_activity_date.strftime('%d.%m.%Y') if client.last_manager_activity_date else 'Нет активности' }}</div>
             <div class="row-eye-cell">
                 <a

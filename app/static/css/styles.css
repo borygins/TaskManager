@@ -294,7 +294,7 @@ textarea {
 
 .row-list-grid {
     display: grid;
-    grid-template-columns: 1.1fr 1.4fr 0.9fr 2fr 1fr 72px;
+    grid-template-columns: 1.1fr 1.4fr 0.9fr 1.8fr 1.5fr 1fr 72px;
     gap: 12px;
     align-items: center;
 }
