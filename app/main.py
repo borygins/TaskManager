@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from urllib.parse import urlencode
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -21,6 +22,7 @@ from app.services.seed import seed_defaults
 from app.services.task_service import (
     get_activity_feed,
     get_client_with_details,
+    get_clients_for_distribution,
     get_dashboard_stats,
     get_funnel_by_id,
     get_funnel_clients,
@@ -130,6 +132,8 @@ async def dashboard(
 async def funnel_detail(
     request: Request,
     funnel_id: int,
+    inn: str | None = None,
+    status_filter: str | None = None,
     current_user: User = Depends(get_current_user),
 ) -> HTMLResponse:
     async with SessionLocal() as session:
@@ -137,7 +141,13 @@ async def funnel_detail(
         funnel = await get_funnel_by_id(funnel_id=funnel_id, session=session)
         if not funnel:
             raise HTTPException(status_code=404, detail="Воронка не найдена.")
-        clients = await get_funnel_clients(funnel_id=funnel_id, current_user=user, session=session)
+        clients = await get_funnel_clients(
+            funnel_id=funnel_id,
+            current_user=user,
+            session=session,
+            inn_query=inn,
+            status_filter=status_filter,
+        )
         managers = await get_managers(session)
     return render(
         request,
@@ -147,8 +157,77 @@ async def funnel_detail(
             "funnel": funnel,
             "clients": clients,
             "managers": managers,
+            "search_inn": inn or "",
+            "selected_status": status_filter or "",
         },
     )
+
+
+@app.get("/boss/distribution", response_class=HTMLResponse)
+async def boss_distribution(
+    request: Request,
+    inn: str | None = None,
+    status_filter: str | None = None,
+    manager_id: str | None = None,
+    current_user: User = Depends(get_boss_user),
+) -> HTMLResponse:
+    manager_id_value = int(manager_id) if manager_id and manager_id.isdigit() else None
+    async with SessionLocal() as session:
+        user = await session.get(User, current_user.id)
+        managers = await get_managers(session)
+        clients = await get_clients_for_distribution(
+            session=session,
+            inn_query=inn,
+            status_filter=status_filter,
+            manager_id=manager_id_value,
+        )
+    return render(
+        request,
+        "boss_distribution.html",
+        {
+            "current_user": user,
+            "managers": managers,
+            "clients": clients,
+            "search_inn": inn or "",
+            "selected_status": status_filter or "",
+            "selected_manager_id": manager_id_value,
+        },
+    )
+
+
+@app.post("/boss/distribution/{client_id}/assign")
+async def assign_client_to_manager(
+    request: Request,
+    client_id: int,
+    current_user: User = Depends(get_boss_user),
+) -> RedirectResponse:
+    form = await request.form()
+    async with SessionLocal() as session:
+        user = await session.get(User, current_user.id)
+        client = await get_client_with_details(client_id=client_id, session=session)
+        if not client:
+            raise HTTPException(status_code=404, detail="Клиент не найден.")
+        await update_client_task(
+            client=client,
+            form_data={"assigned_manager_id": str(form.get("assigned_manager_id", ""))},
+            actor=user,
+            session=session,
+        )
+        await session.commit()
+
+    query = {
+        key: value
+        for key, value in {
+            "inn": str(form.get("search_inn", "")).strip(),
+            "status_filter": str(form.get("selected_status", "")).strip(),
+            "manager_id": str(form.get("selected_manager_id", "")).strip(),
+        }.items()
+        if value
+    }
+    redirect_url = "/boss/distribution"
+    if query:
+        redirect_url = f"{redirect_url}?{urlencode(query)}"
+    return RedirectResponse(redirect_url, status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.post("/clients/{client_id}/save")
@@ -168,7 +247,18 @@ async def save_client(
         await update_client_task(client=client, form_data=dict(form), actor=user, session=session)
         await session.commit()
         funnel_id = int(form.get("funnel_id", "0"))
-    return RedirectResponse(f"/funnels/{funnel_id}", status_code=status.HTTP_303_SEE_OTHER)
+        query = {
+            key: value
+            for key, value in {
+                "inn": str(form.get("search_inn", "")).strip(),
+                "status_filter": str(form.get("selected_status", "")).strip(),
+            }.items()
+            if value
+        }
+    redirect_url = f"/funnels/{funnel_id}"
+    if query:
+        redirect_url = f"{redirect_url}?{urlencode(query)}"
+    return RedirectResponse(redirect_url, status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/activity", response_class=HTMLResponse)
@@ -196,7 +286,7 @@ async def export_excel(current_user: User = Depends(get_current_user)) -> Stream
 
 
 @app.get("/import/template")
-async def download_import_template(current_user: User = Depends(get_current_user)) -> StreamingResponse:
+async def download_import_template(current_user: User = Depends(get_boss_user)) -> StreamingResponse:
     _ = current_user
     file_bytes = build_import_template()
     return StreamingResponse(

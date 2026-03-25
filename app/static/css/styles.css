@@ -66,12 +66,19 @@ a {
 
 .nav a,
 button,
-.file-label {
+.file-label,
+.secondary-link {
     border: 1px solid var(--line);
     border-radius: 16px;
     padding: 12px 14px;
     background: rgba(255, 255, 255, 0.04);
     transition: 0.2s ease;
+}
+
+.secondary-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 button {
@@ -82,7 +89,8 @@ button {
 
 button:hover,
 .nav a:hover,
-.funnel-card:hover {
+.funnel-card:hover,
+.secondary-link:hover {
     transform: translateY(-1px);
     border-color: rgba(96, 245, 161, 0.45);
 }
@@ -134,7 +142,8 @@ button:hover,
 }
 
 .stats-grid,
-.funnel-grid {
+.funnel-grid,
+.assign-grid {
     display: grid;
     gap: 18px;
 }
@@ -143,8 +152,9 @@ button:hover,
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
-.funnel-grid {
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+.funnel-grid,
+.assign-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
 .stat-card,
@@ -169,17 +179,36 @@ button:hover,
     align-items: center;
 }
 
+.column-meta {
+    align-items: flex-start;
+    flex-direction: column;
+}
+
 .client-list {
     display: flex;
     flex-direction: column;
     gap: 18px;
 }
 
-.form-grid {
+.form-grid,
+.filter-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 14px;
-    margin: 18px 0;
+}
+
+.filter-grid-wide {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.filter-panel {
+    margin-bottom: 18px;
+}
+
+.filter-actions {
+    display: flex;
+    gap: 12px;
+    align-items: end;
 }
 
 label {
@@ -227,6 +256,12 @@ textarea {
 .activity-body {
     white-space: pre-line;
     line-height: 1.5;
+}
+
+.compact-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
 }
 
 .comment-item + .comment-item,

@@ -12,7 +12,7 @@
         <aside class="sidebar">
             <div>
                 <div class="brand">Sales Task Manager</div>
-                <p class="brand-caption">Темный интерфейс для продаж, задач и контроля активности.</p>
+                <p class="brand-caption">Ты хозяин своих продаж!</p>
             </div>
             {% if current_user %}
             <nav class="nav">
@@ -20,6 +20,7 @@
                 <a href="/activity">Активность за сегодня</a>
                 <a href="/export">Выгрузить Excel</a>
                 {% if current_user.role == "boss" %}
+                <a href="/boss/distribution">Распределение клиентов</a>
                 <a href="/import/template">Шаблон импорта</a>
                 <form action="/import" method="post" enctype="multipart/form-data" class="import-form">
                     <label class="file-label">

@@ -85,6 +85,8 @@ async def get_funnel_clients(
     funnel_id: int,
     current_user: User,
     session: AsyncSession,
+    inn_query: str | None = None,
+    status_filter: str | None = None,
 ) -> list[Client]:
     statement: Select[tuple[Client]] = (
         select(Client)
@@ -99,6 +101,34 @@ async def get_funnel_clients(
     )
     if current_user.role != "boss":
         statement = statement.where(Client.assigned_manager_id == current_user.id)
+    if inn_query:
+        statement = statement.where(Client.tax_number.contains(inn_query.strip()))
+    if status_filter:
+        statement = statement.where(Client.status == status_filter)
+    result = await session.execute(statement)
+    return list(result.scalars().unique())
+
+
+async def get_clients_for_distribution(
+    session: AsyncSession,
+    inn_query: str | None = None,
+    status_filter: str | None = None,
+    manager_id: int | None = None,
+) -> list[Client]:
+    statement: Select[tuple[Client]] = (
+        select(Client)
+        .options(
+            joinedload(Client.assigned_manager),
+            selectinload(Client.funnel_links).joinedload(ClientFunnel.funnel),
+        )
+        .order_by(Client.updated_at.desc(), Client.full_name.asc())
+    )
+    if inn_query:
+        statement = statement.where(Client.tax_number.contains(inn_query.strip()))
+    if status_filter:
+        statement = statement.where(Client.status == status_filter)
+    if manager_id:
+        statement = statement.where(Client.assigned_manager_id == manager_id)
     result = await session.execute(statement)
     return list(result.scalars().unique())
 

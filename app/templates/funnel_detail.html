@@ -8,10 +8,34 @@
     </div>
 </section>
 
+<section class="panel filter-panel">
+    <form method="get" class="filter-grid">
+        <label>
+            <span>Поиск по ИНН</span>
+            <input type="text" name="inn" value="{{ search_inn }}" placeholder="7701234567">
+        </label>
+        <label>
+            <span>Фильтр по статусу</span>
+            <select name="status_filter">
+                <option value="">Все статусы</option>
+                {% for status_name in statuses %}
+                <option value="{{ status_name }}" {% if selected_status == status_name %}selected{% endif %}>{{ status_name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <div class="filter-actions">
+            <button type="submit">Применить</button>
+            <a class="secondary-link" href="/funnels/{{ funnel.id }}">Сбросить</a>
+        </div>
+    </form>
+</section>
+
 <section class="client-list">
     {% for client in clients %}
     <form method="post" action="/clients/{{ client.id }}/save" class="client-card">
         <input type="hidden" name="funnel_id" value="{{ funnel.id }}">
+        <input type="hidden" name="search_inn" value="{{ search_inn }}">
+        <input type="hidden" name="selected_status" value="{{ selected_status }}">
         <div class="client-card-head">
             <div>
                 <h2>{{ client.full_name }}</h2>
@@ -113,7 +137,7 @@
         </div>
     </form>
     {% else %}
-    <div class="empty-state">В этой воронке пока нет клиентов для вашего доступа.</div>
+    <div class="empty-state">По заданным фильтрам клиенты не найдены.</div>
     {% endfor %}
 </section>
 {% endblock %}

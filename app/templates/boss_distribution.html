@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+    <div>
+        <div class="badge">Начальник</div>
+        <h1>Распределение клиентов</h1>
+        <p class="muted">Здесь можно быстро найти клиента по ИНН, отфильтровать по статусу и назначить нужного менеджера.</p>
+    </div>
+</section>
+
+<section class="panel filter-panel">
+    <form method="get" class="filter-grid filter-grid-wide">
+        <label>
+            <span>Поиск по ИНН</span>
+            <input type="text" name="inn" value="{{ search_inn }}" placeholder="7701234567">
+        </label>
+        <label>
+            <span>Фильтр по статусу</span>
+            <select name="status_filter">
+                <option value="">Все статусы</option>
+                {% for status_name in statuses %}
+                <option value="{{ status_name }}" {% if selected_status == status_name %}selected{% endif %}>{{ status_name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Фильтр по менеджеру</span>
+            <select name="manager_id">
+                <option value="">Все менеджеры</option>
+                {% for manager in managers %}
+                <option value="{{ manager.id }}" {% if selected_manager_id == manager.id %}selected{% endif %}>{{ manager.full_name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <div class="filter-actions">
+            <button type="submit">Применить</button>
+            <a class="secondary-link" href="/boss/distribution">Сбросить</a>
+        </div>
+    </form>
+</section>
+
+<section class="assign-grid">
+    {% for client in clients %}
+    <form method="post" action="/boss/distribution/{{ client.id }}/assign" class="client-card compact-card">
+        <input type="hidden" name="search_inn" value="{{ search_inn }}">
+        <input type="hidden" name="selected_status" value="{{ selected_status }}">
+        <input type="hidden" name="selected_manager_id" value="{{ selected_manager_id or '' }}">
+        <div class="client-card-head">
+            <div>
+                <h2>{{ client.full_name }}</h2>
+                <div class="muted">{{ client.company_name }} • ИНН {{ client.tax_number }}</div>
+            </div>
+            <span class="tag">{{ client.status }}</span>
+        </div>
+        <div class="client-meta column-meta">
+            <div class="muted">Текущий менеджер: {{ client.assigned_manager.full_name if client.assigned_manager else "Не назначен" }}</div>
+            <div class="muted">Воронки: {% for link in client.funnel_links %}{{ link.funnel.name }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
+        </div>
+        <label>
+            <span>Назначить менеджера</span>
+            <select name="assigned_manager_id">
+                {% for manager in managers %}
+                <option value="{{ manager.id }}" {% if client.assigned_manager_id == manager.id %}selected{% endif %}>{{ manager.full_name }} ({{ manager.employee_id }})</option>
+                {% endfor %}
+            </select>
+        </label>
+        <div class="actions">
+            <button type="submit">Назначить</button>
+        </div>
+    </form>
+    {% else %}
+    <div class="empty-state">По заданным фильтрам клиентов не найдено.</div>
+    {% endfor %}
+</section>
+{% endblock %}
