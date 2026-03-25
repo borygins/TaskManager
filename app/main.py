@@ -20,6 +20,7 @@ from app.services.backup import create_backup
 from app.services.excel import build_import_template, export_clients_to_workbook, import_clients_from_excel
 from app.services.seed import seed_defaults
 from app.services.task_service import (
+    bulk_assign_clients,
     get_activity_feed,
     get_client_with_details,
     get_clients_for_distribution,
@@ -229,6 +230,48 @@ async def boss_distribution(
             "selected_manager_id": manager_id_value,
         },
     )
+
+
+@app.post("/boss/distribution/bulk-assign")
+async def bulk_assign_distribution(
+    request: Request,
+    current_user: User = Depends(get_boss_user),
+) -> RedirectResponse:
+    form = await request.form()
+    inn = str(form.get("search_inn", "")).strip()
+    status_filter = str(form.get("selected_status", "")).strip()
+    manager_filter_raw = str(form.get("selected_manager_id", "")).strip()
+    new_manager_id_raw = str(form.get("bulk_assigned_manager_id", "")).strip()
+    manager_filter = int(manager_filter_raw) if manager_filter_raw.isdigit() else None
+    if not new_manager_id_raw.isdigit():
+        return RedirectResponse("/boss/distribution", status_code=status.HTTP_303_SEE_OTHER)
+
+    async with SessionLocal() as session:
+        user = await session.get(User, current_user.id)
+        new_manager = await session.get(User, int(new_manager_id_raw))
+        clients = await get_clients_for_distribution(
+            session=session,
+            inn_query=inn,
+            status_filter=status_filter,
+            manager_id=manager_filter,
+        )
+        if new_manager:
+            await bulk_assign_clients(clients=clients, new_manager=new_manager, actor=user, session=session)
+            await session.commit()
+
+    query = {
+        key: value
+        for key, value in {
+            "inn": inn,
+            "status_filter": status_filter,
+            "manager_id": manager_filter_raw,
+        }.items()
+        if value
+    }
+    redirect_url = "/boss/distribution"
+    if query:
+        redirect_url = f"{redirect_url}?{urlencode(query)}"
+    return RedirectResponse(redirect_url, status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.post("/boss/distribution/{client_id}/assign")

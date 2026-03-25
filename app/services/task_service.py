@@ -227,6 +227,29 @@ async def update_client_task(
         await append_daily_activity(client_id=client.id, actor=actor, changes=changes, session=session)
 
 
+async def bulk_assign_clients(
+    clients: list[Client],
+    new_manager: User,
+    actor: User,
+    session: AsyncSession,
+) -> int:
+    updated = 0
+    for client in clients:
+        if client.assigned_manager_id == new_manager.id:
+            continue
+        old_manager = client.assigned_manager.full_name if client.assigned_manager else ""
+        client.assigned_manager_id = new_manager.id
+        client.last_manager_activity_date = date.today()
+        await append_daily_activity(
+            client_id=client.id,
+            actor=actor,
+            changes=[build_change_message("Ответственный менеджер", old_manager, new_manager.full_name)],
+            session=session,
+        )
+        updated += 1
+    return updated
+
+
 async def get_dashboard_stats(current_user: User, session: AsyncSession) -> dict[str, int]:
     base = select(func.count(Client.id))
     if current_user.role != "boss":
@@ -273,6 +296,6 @@ def client_to_export_row(client: Client) -> dict[str, str]:
         "Банк-конкурент": client.competitor_bank,
         "Адрес регистрации": client.registration_address,
         "Воронки": funnel_names,
-        "Менеджер": client.assigned_manager.full_name if client.assigned_manager else "",
         "Табельный номер": client.assigned_manager.employee_id if client.assigned_manager else "",
+        "ФИО менеджера": client.assigned_manager.full_name if client.assigned_manager else "",
     }

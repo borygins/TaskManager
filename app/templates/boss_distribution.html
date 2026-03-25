@@ -39,6 +39,28 @@
     </form>
 </section>
 
+{% if clients %}
+<section class="panel filter-panel">
+    <form method="post" action="/boss/distribution/bulk-assign" class="filter-grid filter-grid-wide">
+        <input type="hidden" name="search_inn" value="{{ search_inn }}">
+        <input type="hidden" name="selected_status" value="{{ selected_status }}">
+        <input type="hidden" name="selected_manager_id" value="{{ selected_manager_id or '' }}">
+        <label>
+            <span>Назначить все выбранные записи на менеджера</span>
+            <select name="bulk_assigned_manager_id" required>
+                <option value="">Выберите менеджера</option>
+                {% for manager in managers %}
+                <option value="{{ manager.id }}">{{ manager.full_name }} ({{ manager.employee_id }})</option>
+                {% endfor %}
+            </select>
+        </label>
+        <div class="filter-actions">
+            <button type="submit">Назначить все выбранные</button>
+        </div>
+    </form>
+</section>
+{% endif %}
+
 <section class="assign-grid">
     {% for client in clients %}
     <form method="post" action="/boss/distribution/{{ client.id }}/assign" class="client-card compact-card">
