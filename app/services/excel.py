@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.security import normalize_employee_id
 from app.models import Client, ClientFunnel, Funnel, User
 from app.services.task_service import client_to_export_row, parse_decimal, parse_optional_date
 
@@ -67,7 +68,7 @@ async def import_clients_from_excel(file_bytes: bytes, session: AsyncSession) ->
     created = 0
     updated = 0
 
-    for raw_row in rows[1:]:
+    for row_number, raw_row in enumerate(rows[1:], start=2):
         tax_number = str(raw_row[header_index["ИНН"]] or "").strip()
         if not tax_number:
             continue
@@ -76,7 +77,11 @@ async def import_clients_from_excel(file_bytes: bytes, session: AsyncSession) ->
         manager_employee_id = str(raw_row[manager_column] or "").strip() if manager_column is not None else ""
         manager = None
         if manager_employee_id:
-            manager_result = await session.execute(select(User).where(User.employee_id == manager_employee_id))
+            try:
+                normalized_manager_employee_id = normalize_employee_id(manager_employee_id)
+            except ValueError as exc:
+                raise ValueError(f"Строка {row_number}: {exc}") from exc
+            manager_result = await session.execute(select(User).where(User.employee_id == normalized_manager_employee_id))
             manager = manager_result.scalar_one_or_none()
 
         last_activity_column = header_index.get("Дата последней активности менеджера")

@@ -15,7 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.deps import get_boss_user, get_current_user
 from app.core.config import settings
-from app.core.security import hash_password
+from app.core.security import hash_password, normalize_employee_id
 from app.db.session import SessionLocal, init_db
 from app.models import User
 from app.services.auth import authenticate_user
@@ -95,8 +95,12 @@ async def login_page(request: Request) -> HTMLResponse:
 @app.post("/login", response_class=HTMLResponse)
 async def login_action(request: Request) -> Response:
     form = await request.form()
-    employee_id = str(form.get("employee_id", "")).strip()
+    raw_employee_id = str(form.get("employee_id", "")).strip()
     password = str(form.get("password", ""))
+    try:
+        employee_id = normalize_employee_id(raw_employee_id)
+    except ValueError as exc:
+        return render(request, "login.html", {"error": str(exc)})
     async with SessionLocal() as session:
         user = await authenticate_user(employee_id=employee_id, password=password, session=session)
     if not user:
@@ -202,9 +206,25 @@ async def create_boss_user(
     current_user: User = Depends(get_boss_user),
 ) -> Response:
     form = await request.form()
-    employee_id = str(form.get("employee_id", "")).strip()
+    raw_employee_id = str(form.get("employee_id", "")).strip()
     full_name = str(form.get("full_name", "")).strip()
     role = str(form.get("role", "manager")).strip()
+
+    try:
+        employee_id = normalize_employee_id(raw_employee_id)
+    except ValueError as exc:
+        async with SessionLocal() as session:
+            user = await session.get(User, current_user.id)
+            users = list((await session.execute(select(User).order_by(User.role.desc(), User.full_name.asc()))).scalars())
+        return render(
+            request,
+            "boss_users.html",
+            {
+                "current_user": user,
+                "users": users,
+                "create_error": str(exc),
+            },
+        )
 
     async with SessionLocal() as session:
         user = await session.get(User, current_user.id)
@@ -553,7 +573,10 @@ async def import_excel(
     _ = current_user
     file_bytes = await file.read()
     async with SessionLocal() as session:
-        await import_clients_from_excel(file_bytes=file_bytes, session=session)
+        try:
+            await import_clients_from_excel(file_bytes=file_bytes, session=session)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         await session.commit()
     return RedirectResponse("/dashboard", status_code=status.HTTP_303_SEE_OTHER)
 
