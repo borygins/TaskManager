@@ -28,6 +28,7 @@ from app.services.task_service import (
     get_funnel_clients,
     get_funnels,
     get_managers,
+    parse_optional_date,
     update_client_task,
 )
 
@@ -134,8 +135,10 @@ async def funnel_detail(
     funnel_id: int,
     inn: str | None = None,
     status_filter: str | None = None,
+    next_call_date_filter: str | None = None,
     current_user: User = Depends(get_current_user),
 ) -> HTMLResponse:
+    next_call_date = parse_optional_date(next_call_date_filter)
     async with SessionLocal() as session:
         user = await session.get(User, current_user.id)
         funnel = await get_funnel_by_id(funnel_id=funnel_id, session=session)
@@ -147,8 +150,8 @@ async def funnel_detail(
             session=session,
             inn_query=inn,
             status_filter=status_filter,
+            next_call_date_filter=next_call_date,
         )
-        managers = await get_managers(session)
     return render(
         request,
         "funnel_detail.html",
@@ -156,9 +159,42 @@ async def funnel_detail(
             "current_user": user,
             "funnel": funnel,
             "clients": clients,
-            "managers": managers,
             "search_inn": inn or "",
             "selected_status": status_filter or "",
+            "selected_next_call_date": next_call_date_filter or "",
+        },
+    )
+
+
+@app.get("/clients/{client_id}", response_class=HTMLResponse)
+async def client_detail_page(
+    request: Request,
+    client_id: int,
+    funnel_id: int | None = None,
+    inn: str | None = None,
+    status_filter: str | None = None,
+    next_call_date_filter: str | None = None,
+    current_user: User = Depends(get_current_user),
+) -> HTMLResponse:
+    async with SessionLocal() as session:
+        user = await session.get(User, current_user.id)
+        client = await get_client_with_details(client_id=client_id, session=session)
+        if not client:
+            raise HTTPException(status_code=404, detail="Клиент не найден.")
+        if user.role != "boss" and client.assigned_manager_id != user.id:
+            raise HTTPException(status_code=403, detail="Нет доступа к клиенту.")
+        managers = await get_managers(session)
+    return render(
+        request,
+        "client_detail.html",
+        {
+            "current_user": user,
+            "client": client,
+            "managers": managers,
+            "funnel_id": funnel_id,
+            "search_inn": inn or "",
+            "selected_status": status_filter or "",
+            "selected_next_call_date": next_call_date_filter or "",
         },
     )
 
@@ -246,19 +282,25 @@ async def save_client(
             raise HTTPException(status_code=403, detail="Нет доступа к клиенту.")
         await update_client_task(client=client, form_data=dict(form), actor=user, session=session)
         await session.commit()
-        funnel_id = int(form.get("funnel_id", "0"))
-        query = {
-            key: value
-            for key, value in {
-                "inn": str(form.get("search_inn", "")).strip(),
-                "status_filter": str(form.get("selected_status", "")).strip(),
-            }.items()
-            if value
-        }
-    redirect_url = f"/funnels/{funnel_id}"
-    if query:
-        redirect_url = f"{redirect_url}?{urlencode(query)}"
-    return RedirectResponse(redirect_url, status_code=status.HTTP_303_SEE_OTHER)
+
+    funnel_id_raw = str(form.get("funnel_id", "")).strip()
+    query = {
+        key: value
+        for key, value in {
+            "inn": str(form.get("search_inn", "")).strip(),
+            "status_filter": str(form.get("selected_status", "")).strip(),
+            "next_call_date_filter": str(form.get("selected_next_call_date", "")).strip(),
+        }.items()
+        if value
+    }
+
+    if funnel_id_raw.isdigit():
+        redirect_url = f"/clients/{client_id}?funnel_id={funnel_id_raw}"
+        if query:
+            redirect_url = f"{redirect_url}&{urlencode(query)}"
+        return RedirectResponse(redirect_url, status_code=status.HTTP_303_SEE_OTHER)
+
+    return RedirectResponse(f"/clients/{client_id}", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/activity", response_class=HTMLResponse)

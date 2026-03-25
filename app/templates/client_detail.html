@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+    <div>
+        <div class="badge">Карточка клиента</div>
+        <h1>{{ client.full_name }}</h1>
+        <p class="muted">Полная карточка клиента для детальной отработки активности.</p>
+    </div>
+    {% if funnel_id %}
+    <a class="secondary-link" href="/funnels/{{ funnel_id }}">Вернуться в воронку</a>
+    {% endif %}
+</section>
+
+<form method="post" action="/clients/{{ client.id }}/save" class="client-card">
+    <input type="hidden" name="funnel_id" value="{{ funnel_id or '' }}">
+    <input type="hidden" name="search_inn" value="{{ search_inn }}">
+    <input type="hidden" name="selected_status" value="{{ selected_status }}">
+    <input type="hidden" name="selected_next_call_date" value="{{ selected_next_call_date }}">
+
+    <div class="client-card-head">
+        <div>
+            <h2>{{ client.full_name }}</h2>
+            <div class="muted">{{ client.company_name }} • ИНН {{ client.tax_number }}</div>
+        </div>
+        <div class="tags">
+            <span class="tag">{{ client.status }}</span>
+            {% if client.funnel_links|length > 1 %}
+            <span class="tag accent">Несколько воронок</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="form-grid">
+        <label>
+            <span>Телефон</span>
+            <input type="text" name="phone" value="{{ client.phone or '' }}">
+        </label>
+        <label>
+            <span>Дата звонка</span>
+            <input type="date" name="last_call_date" value="{{ client.last_call_date.isoformat() if client.last_call_date else '' }}">
+        </label>
+        <label>
+            <span>Следующая дата звонка</span>
+            <input type="date" name="next_call_date" value="{{ client.next_call_date.isoformat() if client.next_call_date else '' }}">
+        </label>
+        <label>
+            <span>Статус</span>
+            <select name="status">
+                {% for status_name in statuses %}
+                <option value="{{ status_name }}" {% if client.status == status_name %}selected{% endif %}>{{ status_name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Организация</span>
+            <input type="text" name="company_name" value="{{ client.company_name or '' }}">
+        </label>
+        <label>
+            <span>Обороты в месяц</span>
+            <input type="text" name="monthly_turnover" value="{{ client.monthly_turnover or '' }}">
+        </label>
+        <label>
+            <span>MCC</span>
+            <input type="text" name="mcc_code" value="{{ client.mcc_code or '' }}">
+        </label>
+        <label>
+            <span>Банк конкурент</span>
+            <input type="text" name="competitor_bank" value="{{ client.competitor_bank or '' }}">
+        </label>
+        <label class="wide">
+            <span>Адрес регистрации</span>
+            <input type="text" name="registration_address" value="{{ client.registration_address or '' }}">
+        </label>
+        {% if current_user.role == 'boss' %}
+        <label>
+            <span>Ответственный менеджер</span>
+            <select name="assigned_manager_id">
+                {% for manager in managers %}
+                <option value="{{ manager.id }}" {% if client.assigned_manager_id == manager.id %}selected{% endif %}>{{ manager.full_name }} ({{ manager.employee_id }})</option>
+                {% endfor %}
+            </select>
+        </label>
+        {% endif %}
+    </div>
+
+    <label class="wide">
+        <span>Комментарии к активности</span>
+        <textarea name="comment_body" rows="3" placeholder="Комментарий попадет в историю активности клиента"></textarea>
+    </label>
+
+    <div class="client-meta">
+        <div class="muted">Воронки: {% for link in client.funnel_links %}{{ link.funnel.name }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
+        <div class="muted">Ответственный: {{ client.assigned_manager.full_name if client.assigned_manager else 'Не назначен' }}</div>
+    </div>
+
+    <div class="comments-box">
+        <div class="muted">История комментариев</div>
+        {% for comment in client.comments|reverse %}
+        <div class="comment-item">
+            <strong>{{ comment.author.full_name }}</strong>
+            <div>{{ comment.body }}</div>
+            <div class="muted">{{ comment.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+        </div>
+        {% else %}
+        <div class="muted">Комментариев пока нет.</div>
+        {% endfor %}
+    </div>
+
+    <div class="actions">
+        <button type="submit">Сохранить изменения</button>
+    </div>
+</form>
+{% endblock %}

@@ -87,6 +87,7 @@ async def get_funnel_clients(
     session: AsyncSession,
     inn_query: str | None = None,
     status_filter: str | None = None,
+    next_call_date_filter: date | None = None,
 ) -> list[Client]:
     statement: Select[tuple[Client]] = (
         select(Client)
@@ -105,6 +106,8 @@ async def get_funnel_clients(
         statement = statement.where(Client.tax_number.contains(inn_query.strip()))
     if status_filter:
         statement = statement.where(Client.status == status_filter)
+    if next_call_date_filter:
+        statement = statement.where(Client.next_call_date == next_call_date_filter)
     result = await session.execute(statement)
     return list(result.scalars().unique())
 
@@ -120,6 +123,7 @@ async def get_clients_for_distribution(
         .options(
             joinedload(Client.assigned_manager),
             selectinload(Client.funnel_links).joinedload(ClientFunnel.funnel),
+            selectinload(Client.comments).joinedload(Comment.author),
         )
         .order_by(Client.updated_at.desc(), Client.full_name.asc())
     )
@@ -175,7 +179,6 @@ async def update_client_task(
         ("phone", "phone", "Телефон", lambda value: value.strip()),
         ("last_call_date", "last_call_date", "Дата звонка", parse_optional_date),
         ("next_call_date", "next_call_date", "Следующая дата звонка", parse_optional_date),
-        ("manager_notes", "manager_notes", "Комментарий менеджера", lambda value: value.strip()),
         ("company_name", "company_name", "Организация", lambda value: value.strip()),
         ("monthly_turnover", "monthly_turnover", "Оборот в месяц", parse_decimal),
         ("mcc_code", "mcc_code", "MCC", lambda value: value.strip()),
@@ -201,7 +204,7 @@ async def update_client_task(
     comment_body = form_data.get("comment_body", "").strip()
     if comment_body:
         session.add(Comment(client_id=client.id, author_id=actor.id, body=comment_body))
-        changes.append(f"Комментарий: {comment_body}")
+        changes.append(f"Комментарий к активности: {comment_body}")
 
     manager_id_raw = form_data.get("assigned_manager_id")
     if actor.role == "boss" and manager_id_raw:

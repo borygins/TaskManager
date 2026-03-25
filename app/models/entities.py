@@ -58,7 +58,11 @@ class Client(Base):
 
     assigned_manager: Mapped[User | None] = relationship(back_populates="clients")
     funnel_links: Mapped[list["ClientFunnel"]] = relationship(back_populates="client", cascade="all, delete-orphan")
-    comments: Mapped[list["Comment"]] = relationship(back_populates="client", cascade="all, delete-orphan")
+    comments: Mapped[list["Comment"]] = relationship(
+        back_populates="client",
+        cascade="all, delete-orphan",
+        order_by="Comment.created_at",
+    )
     activities: Mapped[list["ActivityLog"]] = relationship(back_populates="client", cascade="all, delete-orphan")
 
 
