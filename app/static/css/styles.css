@@ -263,10 +263,17 @@ textarea {
     line-height: 1.5;
 }
 
-.compact-card {
+.compact-card,
+.admin-user-card,
+.inline-reset-form {
     display: flex;
     flex-direction: column;
     gap: 14px;
+}
+
+.admin-actions-grid {
+    display: grid;
+    gap: 12px;
 }
 
 .row-list-panel {

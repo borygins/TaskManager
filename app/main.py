@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import date
 from urllib.parse import urlencode
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -101,6 +102,50 @@ async def login_action(request: Request) -> Response:
     if not user:
         return render(request, "login.html", {"error": "Неверный табельный номер или пароль."})
     request.session["user_id"] = user.id
+    if user.must_change_password:
+        return RedirectResponse("/change-password", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse("/dashboard", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.get("/change-password", response_class=HTMLResponse)
+async def change_password_page(request: Request) -> Response:
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
+    async with SessionLocal() as session:
+        user = await session.get(User, user_id)
+        if not user:
+            request.session.clear()
+            return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
+        if not user.must_change_password:
+            return RedirectResponse("/dashboard", status_code=status.HTTP_303_SEE_OTHER)
+    return render(request, "change_password.html", {"error": None})
+
+
+@app.post("/change-password", response_class=HTMLResponse)
+async def change_password_action(request: Request) -> Response:
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    form = await request.form()
+    password = str(form.get("password", "")).strip()
+    password_confirm = str(form.get("password_confirm", "")).strip()
+
+    if len(password) < 4:
+        return render(request, "change_password.html", {"error": "Новый пароль должен быть не короче 4 символов."})
+    if password != password_confirm:
+        return render(request, "change_password.html", {"error": "Подтверждение пароля не совпадает."})
+
+    async with SessionLocal() as session:
+        user = await session.get(User, user_id)
+        if not user:
+            request.session.clear()
+            return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
+        user.password_hash = hash_password(password)
+        user.must_change_password = False
+        await session.commit()
+
     return RedirectResponse("/dashboard", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -147,7 +192,6 @@ async def boss_users_page(
             "current_user": user,
             "users": users,
             "create_error": None,
-            "create_success": None,
         },
     )
 
@@ -174,7 +218,6 @@ async def create_boss_user(
                     "current_user": user,
                     "users": users,
                     "create_error": "Заполните табельный номер, ФИО и корректную роль.",
-                    "create_success": None,
                 },
             )
 
@@ -187,7 +230,6 @@ async def create_boss_user(
                     "current_user": user,
                     "users": users,
                     "create_error": "Пользователь с таким табельным номером уже существует.",
-                    "create_success": None,
                 },
             )
 
@@ -197,11 +239,59 @@ async def create_boss_user(
                 full_name=full_name,
                 role=role,
                 password_hash=hash_password(employee_id),
+                must_change_password=True,
             )
         )
         await session.commit()
 
     return RedirectResponse("/boss/users?created=1", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/boss/users/{target_user_id}/role")
+async def update_user_role(
+    request: Request,
+    target_user_id: int,
+    current_user: User = Depends(get_boss_user),
+) -> RedirectResponse:
+    form = await request.form()
+    new_role = str(form.get("role", "manager")).strip()
+    valid_until_raw = str(form.get("role_valid_until", "")).strip()
+    valid_until = parse_optional_date(valid_until_raw)
+
+    async with SessionLocal() as session:
+        _ = await session.get(User, current_user.id)
+        target = await session.get(User, target_user_id)
+        if target and new_role in {"boss", "manager"}:
+            current_role = target.role
+            previous_fallback = target.role_after_expiry
+            target.role = new_role
+            if valid_until:
+                target.role_expires_at = valid_until
+                if new_role != current_role:
+                    target.role_after_expiry = current_role
+                else:
+                    target.role_after_expiry = previous_fallback or current_role
+            else:
+                target.role_expires_at = None
+                target.role_after_expiry = None
+            await session.commit()
+
+    return RedirectResponse("/boss/users?role_updated=1", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/boss/users/{target_user_id}/reset-password")
+async def reset_user_password(
+    target_user_id: int,
+    current_user: User = Depends(get_boss_user),
+) -> RedirectResponse:
+    async with SessionLocal() as session:
+        _ = await session.get(User, current_user.id)
+        target = await session.get(User, target_user_id)
+        if target:
+            target.password_hash = hash_password(target.employee_id)
+            target.must_change_password = True
+            await session.commit()
+    return RedirectResponse("/boss/users?password_reset=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/funnels/{funnel_id}", response_class=HTMLResponse)

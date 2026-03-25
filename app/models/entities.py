@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -15,7 +15,10 @@ class User(Base):
     employee_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(32), index=True)
+    role_expires_at: Mapped[date | None] = mapped_column(Date, nullable=True)
+    role_after_expiry: Mapped[str | None] = mapped_column(String(32), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

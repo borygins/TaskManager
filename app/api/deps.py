@@ -1,11 +1,23 @@
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.models import User
+
+
+async def normalize_user_role(user: User, session: AsyncSession) -> User:
+    if user.role_expires_at and user.role_after_expiry and user.role_expires_at < date.today():
+        user.role = user.role_after_expiry
+        user.role_after_expiry = None
+        user.role_expires_at = None
+        await session.commit()
+        await session.refresh(user)
+    return user
 
 
 async def get_current_user(
@@ -19,6 +31,9 @@ async def get_current_user(
     if not user or not user.is_active:
         request.session.clear()
         raise HTTPException(status_code=status.HTTP_303_SEE_OTHER, headers={"Location": "/login"})
+    user = await normalize_user_role(user=user, session=session)
+    if user.must_change_password and request.url.path != "/change-password":
+        raise HTTPException(status_code=status.HTTP_303_SEE_OTHER, headers={"Location": "/change-password"})
     return user
 
 

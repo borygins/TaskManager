@@ -4,7 +4,7 @@
     <div>
         <div class="badge">Начальник</div>
         <h1>Пользователи</h1>
-        <p class="muted">Создание новых учетных записей для менеджеров и руководителей.</p>
+        <p class="muted">Создание новых учетных записей, временная или бессрочная смена роли и ручной сброс пароля.</p>
     </div>
 </section>
 
@@ -16,7 +16,13 @@
     <div class="error-box">{{ create_error }}</div>
     {% endif %}
     {% if request.query_params.get('created') == '1' %}
-    <div class="hint">Пользователь создан. Стартовый пароль равен его табельному номеру.</div>
+    <div class="hint">Пользователь создан. Стартовый пароль равен его табельному номеру, при входе потребуется смена пароля.</div>
+    {% endif %}
+    {% if request.query_params.get('role_updated') == '1' %}
+    <div class="hint">Роль пользователя обновлена.</div>
+    {% endif %}
+    {% if request.query_params.get('password_reset') == '1' %}
+    <div class="hint">Пароль пользователя сброшен до табельного номера. При следующем входе потребуется смена.</div>
     {% endif %}
     <form method="post" action="/boss/users" class="filter-grid filter-grid-wide">
         <label>
@@ -46,11 +52,41 @@
     </div>
     <div class="row-list-body">
         {% for user in users %}
-        <div class="row-item user-row-grid">
-            <div><strong>{{ user.full_name }}</strong></div>
-            <div class="muted">Табельный: {{ user.employee_id }}</div>
-            <div><span class="tag">{{ 'Руководитель' if user.role == 'boss' else 'Менеджер' }}</span></div>
-            <div class="muted">Создан: {{ user.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+        <div class="row-item admin-user-card">
+            <div class="user-row-grid">
+                <div><strong>{{ user.full_name }}</strong></div>
+                <div class="muted">Табельный: {{ user.employee_id }}</div>
+                <div><span class="tag">{{ 'Руководитель' if user.role == 'boss' else 'Менеджер' }}</span></div>
+                <div class="muted">Создан: {{ user.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+            </div>
+            <div class="muted">
+                {% if user.role_expires_at %}
+                Временная роль до {{ user.role_expires_at.strftime('%d.%m.%Y') }}, затем: {{ 'Руководитель' if user.role_after_expiry == 'boss' else 'Менеджер' }}
+                {% else %}
+                Роль действует бессрочно.
+                {% endif %}
+            </div>
+            <div class="admin-actions-grid">
+                <form method="post" action="/boss/users/{{ user.id }}/role" class="filter-grid filter-grid-wide">
+                    <label>
+                        <span>Новая роль</span>
+                        <select name="role" required>
+                            <option value="manager" {% if user.role == 'manager' %}selected{% endif %}>Менеджер</option>
+                            <option value="boss" {% if user.role == 'boss' %}selected{% endif %}>Руководитель</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>До даты</span>
+                        <input type="date" name="role_valid_until" value="{{ user.role_expires_at.isoformat() if user.role_expires_at else '' }}">
+                    </label>
+                    <div class="filter-actions">
+                        <button type="submit">Обновить роль</button>
+                    </div>
+                </form>
+                <form method="post" action="/boss/users/{{ user.id }}/reset-password" class="inline-reset-form">
+                    <button type="submit">Сбросить пароль до табельного номера</button>
+                </form>
+            </div>
         </div>
         {% else %}
         <div class="empty-state">Пользователей пока нет.</div>

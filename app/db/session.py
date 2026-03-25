@@ -38,10 +38,17 @@ async def init_db() -> None:
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
-        columns = {
-            row[1]
-            for row in (await connection.execute(text("PRAGMA table_info(clients)"))).fetchall()
-        }
-        if "last_manager_activity_date" not in columns:
+
+        client_columns = {row[1] for row in (await connection.execute(text("PRAGMA table_info(clients)"))).fetchall()}
+        if "last_manager_activity_date" not in client_columns:
             await connection.execute(text("ALTER TABLE clients ADD COLUMN last_manager_activity_date DATE"))
+
+        user_columns = {row[1] for row in (await connection.execute(text("PRAGMA table_info(users)"))).fetchall()}
+        if "role_expires_at" not in user_columns:
+            await connection.execute(text("ALTER TABLE users ADD COLUMN role_expires_at DATE"))
+        if "role_after_expiry" not in user_columns:
+            await connection.execute(text("ALTER TABLE users ADD COLUMN role_after_expiry VARCHAR(32)"))
+        if "must_change_password" not in user_columns:
+            await connection.execute(text("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0"))
+
         await connection.execute(text("PRAGMA wal_checkpoint(TRUNCATE);"))
