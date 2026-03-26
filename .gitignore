@@ -1,4 +1,5 @@
 .venv/
+my_venv/
 .idea/
 __pycache__/
 *.pyc
@@ -9,3 +10,4 @@ task_manager.sqlite3-*
 backups/
 app/static/uploads/
 .env
+*.txt
