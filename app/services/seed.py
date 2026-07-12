@@ -19,6 +19,9 @@ async def seed_defaults(session: AsyncSession) -> None:
         result = await session.execute(select(User).where(User.employee_id == employee_id))
         user = result.scalar_one_or_none()
         if not user:
+            if not payload["password"]:
+                raise RuntimeError(f"Password for seeded user {employee_id} is not configured.")
+
             session.add(
                 User(
                     employee_id=employee_id,

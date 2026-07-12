@@ -222,14 +222,15 @@
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+copy .env.example .env
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 После первого запуска приложение создаст:
 
 - базу `task_manager.sqlite3`;
-- тестовую учетку начальника `01333777 / admin`;
-- тестовую учетку менеджера `01666222 / manager`;
+- тестовую учетку начальника `01333777 / SEEDED_BOSS_PASSWORD`;
+- тестовую учетку менеджера `01666222 / SEEDED_MANAGER_PASSWORD`;
 - две стартовые воронки: `Доля рынка` и `Спарк`.
 
 ## Доступ к системе
