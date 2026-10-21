@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Client, ClientFunnel, Funnel, User
@@ -67,3 +67,37 @@ async def create_client(session: AsyncSession, actor: User, data: NewClientInput
     session.add(ClientFunnel(client_id=client.id, funnel_id=funnel.id))
     await append_daily_activity(client.id, actor, [f"Создан клиент, добавлен в воронку «{funnel.name}»."], session)
     return client
+
+
+async def search_clients(session: AsyncSession, actor: User, query: str = "", status: str = "",
+                         funnel_id: int | None = None, owner: str = "", page: int = 1,
+                         page_size: int = 50):
+    # Only directory fields: do not expose phones, notes or contact history of other managers.
+    conditions = []
+    if term := query.strip().casefold():
+        conditions.append(or_(
+            func.casefold(Client.tax_number).contains(term, autoescape=True),
+            func.casefold(Client.full_name).contains(term, autoescape=True),
+            func.casefold(Client.company_name).contains(term, autoescape=True),
+        ))
+    if status:
+        conditions.append(Client.status == status)
+    if funnel_id is not None:
+        conditions.append(Client.funnel_links.any(ClientFunnel.funnel_id == funnel_id))
+    if owner == "mine":
+        conditions.append(Client.assigned_manager_id == actor.id)
+    elif owner == "unassigned":
+        conditions.append(Client.assigned_manager_id.is_(None))
+    elif owner:
+        conditions.append(Client.assigned_manager_id == int(owner))
+    total = await session.scalar(select(func.count(Client.id)).where(*conditions))
+    pages = max(1, (total + page_size - 1) // page_size)
+    page = min(page, pages)
+    statement = select(
+        Client.id, Client.tax_number, Client.company_name, Client.full_name, Client.status,
+        Client.assigned_manager_id, User.full_name.label("manager_name"),
+    ).outerjoin(User, User.id == Client.assigned_manager_id).where(*conditions).order_by(
+        Client.company_name, Client.full_name, Client.id,
+    ).offset((page - 1) * page_size).limit(page_size)
+    clients = (await session.execute(statement)).mappings().all()
+    return clients, total, page, pages

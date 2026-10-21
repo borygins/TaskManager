@@ -1,18 +1,44 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from urllib.parse import urlencode
+
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.contacts import check_csrf, render
 from app.api.deps import get_current_user
 from app.db.session import SessionLocal
 from app.models import Client, Funnel, User
-from app.services.clients import ClientAlreadyExists, create_client, parse_new_client
+from app.services.clients import ClientAlreadyExists, create_client, parse_new_client, search_clients
 
 
 router = APIRouter()
+
+
+@router.get("/clients/search", response_class=HTMLResponse)
+async def client_search(request: Request, q: str = Query("", max_length=255),
+                        status: str = Query("", max_length=64),
+                        funnel_id: str = Query("", pattern=r"^(?:|[1-9][0-9]{0,17})$"),
+                        owner: str = Query("", pattern=r"^(?:|mine|unassigned|[1-9][0-9]{0,17})$"),
+                        page: int = Query(1, ge=1), user: User = Depends(get_current_user)):
+    async with SessionLocal() as session:
+        clients, total, page, pages = await search_clients(
+            session, user, q, status, int(funnel_id) if funnel_id else None, owner, page,
+        )
+        funnels = list((await session.scalars(select(Funnel).order_by(Funnel.name))).all())
+        managers = list((await session.scalars(select(User).where(or_(
+            User.role == "manager", User.clients.any(),
+        )).order_by(User.full_name, User.id))).all())
+        statuses = list((await session.scalars(select(Client.status).distinct().order_by(Client.status))).all())
+    filters = {"q": q, "status": status, "funnel_id": funnel_id, "owner": owner}
+    return render(request, "client_search.html", {
+        "current_user": user, "clients": clients, "total": total, "page": page, "pages": pages,
+        "filters": filters, "funnels": funnels, "managers": managers, "statuses": statuses,
+        "previous_url": "/clients/search?" + urlencode({**filters, "page": page - 1}) if page > 1 else None,
+        "next_url": "/clients/search?" + urlencode({**filters, "page": page + 1}) if page < pages else None,
+    })
 
 
 async def new_client_response(request: Request, user: User, values=None, error=None, status_code=200):

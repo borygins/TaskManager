@@ -141,6 +141,94 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(headers["cache-control"], "no-store")
             build.assert_not_called()
 
+    async def test_global_client_search_visibility_and_card_permissions(self):
+        async with self.factory() as session:
+            other_client = await session.get(Client, self.other_client.id)
+            other_client.phone = "PRIVATE_PHONE_SENTINEL"
+            other_client.manager_notes = "PRIVATE_NOTES_SENTINEL"
+            unassigned = Client(tax_number="001111111119", company_name="Без закрепления", full_name="Свободный клиент")
+            session.add(unassigned)
+            await session.commit()
+        with patch("app.main.SessionLocal", self.factory):
+            for user in (self.manager, self.boss):
+                self.active_user = user
+                status, _, body = await self.request("GET", "/clients/search")
+                self.assertEqual(status, 200)
+                text = body.decode()
+                self.assertIn("Найдено клиентов: 4", text)
+                self.assertIn(self.other.full_name, text)
+                self.assertNotIn("PRIVATE_PHONE_SENTINEL", text)
+                self.assertNotIn("PRIVATE_NOTES_SENTINEL", text)
+                for target in (self.client, self.other_client, unassigned):
+                    self.assertIn(target.tax_number, text)
+                    allowed = user.role == "boss" or target.assigned_manager_id == user.id
+                    self.assertEqual(f'href="/clients/{target.id}"' in text, allowed)
+                    card_status, _, _ = await self.request("GET", f"/clients/{target.id}")
+                    self.assertEqual(card_status, 200 if allowed else 403)
+
+    async def test_global_search_matches_inn_cyrillic_name_and_company(self):
+        for query, expected in (
+            (" 001234 ", self.client), ("иВаН", self.client), ("РОМАШКА", self.client),
+            ("чУжОй", self.other_client), ("ООО ЮГ", self.other_client),
+        ):
+            status, _, body = await self.request("GET", "/clients/search?" + urlencode({"q": query}))
+            self.assertEqual(status, 200)
+            self.assertIn("Найдено клиентов: 1", body.decode())
+            self.assertIn(expected.tax_number, body.decode())
+        for query in ("%", "_", "Несуществующий клиент", "<script>alert(1)</script>"):
+            status, _, body = await self.request("GET", "/clients/search?" + urlencode({"q": query}))
+            self.assertEqual(status, 200)
+            self.assertIn("Клиенты не найдены", body.decode())
+            self.assertNotIn("<script>alert(1)</script>", body.decode())
+
+    async def test_global_search_combines_filters_without_duplicate_clients(self):
+        async with self.factory() as session:
+            client = await session.get(Client, self.client.id)
+            client.status = "Переговоры"
+            session.add_all([
+                ClientFunnel(client_id=self.client.id, funnel_id=self.funnel.id),
+                ClientFunnel(client_id=self.client.id, funnel_id=self.second_funnel.id),
+                ClientFunnel(client_id=self.other_client.id, funnel_id=self.funnel.id),
+                Client(tax_number="001111111119", full_name="Свободный клиент", company_name="Свободный клиент"),
+            ])
+            await session.commit()
+        for filters, expected in (
+            ({"owner": "mine"}, 2), ({"owner": str(self.other.id)}, 1),
+            ({"owner": "unassigned"}, 1), ({"funnel_id": self.funnel.id}, 2),
+            ({"q": "ООО", "funnel_id": self.funnel.id, "status": "Переговоры", "owner": "mine"}, 1),
+            ({"funnel_id": self.second_funnel.id, "owner": str(self.other.id)}, 0),
+        ):
+            status, _, body = await self.request("GET", "/clients/search?" + urlencode(filters))
+            self.assertEqual(status, 200)
+            self.assertIn(f"Найдено клиентов: {expected}", body.decode())
+
+    async def test_global_search_pagination_validation_and_authentication(self):
+        async with self.factory() as session:
+            session.add_all([Client(tax_number=f"88000000{index:04d}", full_name=f"Пагинация {index:02d}",
+                                    company_name=f"Пагинация {index:02d}", assigned_manager_id=self.manager.id)
+                             for index in range(55)])
+            await session.commit()
+        query = {"q": "Пагинация", "owner": "mine"}
+        status, _, body = await self.request("GET", "/clients/search?" + urlencode(query))
+        self.assertEqual(status, 200)
+        self.assertIn("Найдено клиентов: 55", body.decode())
+        self.assertEqual(body.decode().count('>Открыть</a>'), 50)
+        next_url = html.unescape(re.search(r'href="([^"]+)">Далее</a>', body.decode()).group(1))
+        self.assertIn("owner=mine", next_url)
+        self.assertIn("q=", next_url)
+        status, _, body = await self.request("GET", next_url)
+        self.assertEqual(status, 200)
+        self.assertEqual(body.decode().count('>Открыть</a>'), 5)
+        self.assertIn("Страница 2 из 2", body.decode())
+        for invalid in ("page=0", "owner=bad", "funnel_id=-1"):
+            status, _, _ = await self.request("GET", f"/clients/search?{invalid}")
+            self.assertEqual(status, 422)
+        app.dependency_overrides.pop(get_current_user)
+        self.cookies = ""
+        status, headers, _ = await self.request("GET", "/clients/search")
+        self.assertEqual(status, 303)
+        self.assertEqual(headers["location"], "/login")
+
     async def test_navigation_hides_personal_contacts_for_boss(self):
         for user in (self.manager, self.boss):
             self.active_user = user

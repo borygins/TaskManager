@@ -17,6 +17,7 @@
             {% if current_user %}
             <nav class="nav">
                 <a href="/dashboard">Главная</a>
+                <a href="/clients/search">Поиск клиентов</a>
                 {% if current_user.role != "boss" %}
                 <a href="/contacts">Мои звонки и встречи</a>
                 {% endif %}
