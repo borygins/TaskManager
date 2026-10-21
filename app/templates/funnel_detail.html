@@ -4,15 +4,15 @@
     <div>
         <div class="badge">Воронка</div>
         <h1>{{ funnel.name }}</h1>
-        <p class="muted">Список клиентов можно быстро отфильтровать по ИНН, статусу и дате следующего звонка.</p>
+        <p class="muted">Список клиентов можно быстро найти по ИНН, ФИО или организации и отфильтровать по статусу и дате звонка.</p>
     </div>
 </section>
 
 <section class="panel filter-panel">
     <form method="get" class="filter-grid filter-grid-wide">
         <label>
-            <span>Поиск по ИНН</span>
-            <input type="text" name="inn" value="{{ search_inn }}" placeholder="7701234567">
+            <span>Поиск клиента</span>
+            <input type="search" name="q" value="{{ search_query }}" placeholder="ИНН, ФИО или организация">
         </label>
         <label>
             <span>Фильтр по статусу</span>
@@ -56,7 +56,7 @@
             <div class="row-eye-cell">
                 <a
                     class="eye-link"
-                    href="/clients/{{ client.id }}?funnel_id={{ funnel.id }}"
+                    href="/clients/{{ client.id }}?funnel_id={{ funnel.id }}&q={{ search_query|urlencode }}&status_filter={{ selected_status|urlencode }}&next_call_date_filter={{ selected_next_call_date|urlencode }}"
                     target="_blank"
                     rel="noopener noreferrer"
                     title="Открыть карточку"

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, time
 from decimal import Decimal, InvalidOperation
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -85,7 +85,7 @@ async def get_funnel_clients(
     funnel_id: int,
     current_user: User,
     session: AsyncSession,
-    inn_query: str | None = None,
+    search_query: str | None = None,
     status_filter: str | None = None,
     next_call_date_filter: date | None = None,
 ) -> list[Client]:
@@ -102,8 +102,14 @@ async def get_funnel_clients(
     )
     if current_user.role != "boss":
         statement = statement.where(Client.assigned_manager_id == current_user.id)
-    if inn_query:
-        statement = statement.where(Client.tax_number.contains(inn_query.strip()))
+    if search_query and (query := search_query.strip()):
+        statement = statement.where(
+            or_(
+                func.casefold(Client.tax_number).contains(query.casefold(), autoescape=True),
+                func.casefold(Client.full_name).contains(query.casefold(), autoescape=True),
+                func.casefold(Client.company_name).contains(query.casefold(), autoescape=True),
+            )
+        )
     if status_filter:
         statement = statement.where(Client.status == status_filter)
     if next_call_date_filter:
@@ -114,7 +120,7 @@ async def get_funnel_clients(
 
 async def get_clients_for_distribution(
     session: AsyncSession,
-    inn_query: str | None = None,
+    search_query: str | None = None,
     status_filter: str | None = None,
     manager_id: int | None = None,
 ) -> list[Client]:
@@ -127,8 +133,14 @@ async def get_clients_for_distribution(
         )
         .order_by(Client.updated_at.desc(), Client.full_name.asc())
     )
-    if inn_query:
-        statement = statement.where(Client.tax_number.contains(inn_query.strip()))
+    if search_query and (query := search_query.strip()):
+        statement = statement.where(
+            or_(
+                func.casefold(Client.tax_number).contains(query.casefold(), autoescape=True),
+                func.casefold(Client.full_name).contains(query.casefold(), autoescape=True),
+                func.casefold(Client.company_name).contains(query.casefold(), autoescape=True),
+            )
+        )
     if status_filter:
         statement = statement.where(Client.status == status_filter)
     if manager_id:

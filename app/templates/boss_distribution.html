@@ -4,15 +4,15 @@
     <div>
         <div class="badge">Начальник</div>
         <h1>Распределение клиентов</h1>
-        <p class="muted">Здесь можно быстро найти клиента по ИНН, отфильтровать по статусу и назначить нужного менеджера.</p>
+        <p class="muted">Здесь можно найти клиента по ИНН, ФИО или организации, отфильтровать список и назначить нужного менеджера.</p>
     </div>
 </section>
 
 <section class="panel filter-panel">
     <form method="get" class="filter-grid filter-grid-wide">
         <label>
-            <span>Поиск по ИНН</span>
-            <input type="text" name="inn" value="{{ search_inn }}" placeholder="7701234567">
+            <span>Поиск клиента</span>
+            <input type="search" name="q" value="{{ search_query }}" placeholder="ИНН, ФИО или организация">
         </label>
         <label>
             <span>Фильтр по статусу</span>
@@ -42,7 +42,7 @@
 {% if clients %}
 <section class="panel filter-panel">
     <form method="post" action="/boss/distribution/bulk-assign" class="filter-grid filter-grid-wide">
-        <input type="hidden" name="search_inn" value="{{ search_inn }}">
+        <input type="hidden" name="search_query" value="{{ search_query }}">
         <input type="hidden" name="selected_status" value="{{ selected_status }}">
         <input type="hidden" name="selected_manager_id" value="{{ selected_manager_id or '' }}">
         <label>
@@ -64,7 +64,7 @@
 <section class="assign-grid">
     {% for client in clients %}
     <form method="post" action="/boss/distribution/{{ client.id }}/assign" class="client-card compact-card">
-        <input type="hidden" name="search_inn" value="{{ search_inn }}">
+        <input type="hidden" name="search_query" value="{{ search_query }}">
         <input type="hidden" name="selected_status" value="{{ selected_status }}">
         <input type="hidden" name="selected_manager_id" value="{{ selected_manager_id or '' }}">
         <div class="client-card-head">

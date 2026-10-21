@@ -318,11 +318,13 @@ async def reset_user_password(
 async def funnel_detail(
     request: Request,
     funnel_id: int,
+    q: str | None = None,
     inn: str | None = None,
     status_filter: str | None = None,
     next_call_date_filter: str | None = None,
     current_user: User = Depends(get_current_user),
 ) -> HTMLResponse:
+    search_query = q if q is not None else inn
     next_call_date = parse_optional_date(next_call_date_filter)
     async with SessionLocal() as session:
         user = await session.get(User, current_user.id)
@@ -333,7 +335,7 @@ async def funnel_detail(
             funnel_id=funnel_id,
             current_user=user,
             session=session,
-            inn_query=inn,
+            search_query=search_query,
             status_filter=status_filter,
             next_call_date_filter=next_call_date,
         )
@@ -344,7 +346,7 @@ async def funnel_detail(
             "current_user": user,
             "funnel": funnel,
             "clients": clients,
-            "search_inn": inn or "",
+            "search_query": search_query or "",
             "selected_status": status_filter or "",
             "selected_next_call_date": next_call_date_filter or "",
         },
@@ -356,11 +358,13 @@ async def client_detail_page(
     request: Request,
     client_id: int,
     funnel_id: int | None = None,
+    q: str | None = None,
     inn: str | None = None,
     status_filter: str | None = None,
     next_call_date_filter: str | None = None,
     current_user: User = Depends(get_current_user),
 ) -> HTMLResponse:
+    search_query = q if q is not None else inn
     async with SessionLocal() as session:
         user = await session.get(User, current_user.id)
         client = await get_client_with_details(client_id=client_id, session=session)
@@ -377,7 +381,7 @@ async def client_detail_page(
             "client": client,
             "managers": managers,
             "funnel_id": funnel_id,
-            "search_inn": inn or "",
+            "search_query": search_query or "",
             "selected_status": status_filter or "",
             "selected_next_call_date": next_call_date_filter or "",
         },
@@ -387,18 +391,20 @@ async def client_detail_page(
 @app.get("/boss/distribution", response_class=HTMLResponse)
 async def boss_distribution(
     request: Request,
+    q: str | None = None,
     inn: str | None = None,
     status_filter: str | None = None,
     manager_id: str | None = None,
     current_user: User = Depends(get_boss_user),
 ) -> HTMLResponse:
+    search_query = q if q is not None else inn
     manager_id_value = int(manager_id) if manager_id and manager_id.isdigit() else None
     async with SessionLocal() as session:
         user = await session.get(User, current_user.id)
         managers = await get_managers(session)
         clients = await get_clients_for_distribution(
             session=session,
-            inn_query=inn,
+            search_query=search_query,
             status_filter=status_filter,
             manager_id=manager_id_value,
         )
@@ -409,7 +415,7 @@ async def boss_distribution(
             "current_user": user,
             "managers": managers,
             "clients": clients,
-            "search_inn": inn or "",
+            "search_query": search_query or "",
             "selected_status": status_filter or "",
             "selected_manager_id": manager_id_value,
         },
@@ -422,7 +428,7 @@ async def bulk_assign_distribution(
     current_user: User = Depends(get_boss_user),
 ) -> RedirectResponse:
     form = await request.form()
-    inn = str(form.get("search_inn", "")).strip()
+    search_query = str(form.get("search_query", "")).strip()
     status_filter = str(form.get("selected_status", "")).strip()
     manager_filter_raw = str(form.get("selected_manager_id", "")).strip()
     new_manager_id_raw = str(form.get("bulk_assigned_manager_id", "")).strip()
@@ -435,7 +441,7 @@ async def bulk_assign_distribution(
         new_manager = await session.get(User, int(new_manager_id_raw))
         clients = await get_clients_for_distribution(
             session=session,
-            inn_query=inn,
+            search_query=search_query,
             status_filter=status_filter,
             manager_id=manager_filter,
         )
@@ -446,7 +452,7 @@ async def bulk_assign_distribution(
     query = {
         key: value
         for key, value in {
-            "inn": inn,
+            "q": search_query,
             "status_filter": status_filter,
             "manager_id": manager_filter_raw,
         }.items()
@@ -481,7 +487,7 @@ async def assign_client_to_manager(
     query = {
         key: value
         for key, value in {
-            "inn": str(form.get("search_inn", "")).strip(),
+            "q": str(form.get("search_query", "")).strip(),
             "status_filter": str(form.get("selected_status", "")).strip(),
             "manager_id": str(form.get("selected_manager_id", "")).strip(),
         }.items()
@@ -514,7 +520,7 @@ async def save_client(
     query = {
         key: value
         for key, value in {
-            "inn": str(form.get("search_inn", "")).strip(),
+            "q": str(form.get("search_query", "")).strip(),
             "status_filter": str(form.get("selected_status", "")).strip(),
             "next_call_date_filter": str(form.get("selected_next_call_date", "")).strip(),
         }.items()

@@ -18,6 +18,13 @@ engine: AsyncEngine = create_async_engine(settings.database_url, echo=False, fut
 
 @event.listens_for(engine.sync_engine, "connect")
 def configure_sqlite(dbapi_connection, connection_record) -> None:
+    _ = connection_record
+    dbapi_connection.create_function(
+        "casefold",
+        1,
+        lambda value: value.casefold() if value is not None else None,
+        deterministic=True,
+    )
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL;")
     cursor.execute("PRAGMA foreign_keys=ON;")

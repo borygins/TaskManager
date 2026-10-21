@@ -7,13 +7,13 @@
         <p class="muted">Полная карточка клиента для детальной отработки активности.</p>
     </div>
     {% if funnel_id %}
-    <a class="secondary-link" href="/funnels/{{ funnel_id }}">Вернуться в воронку</a>
+    <a class="secondary-link" href="/funnels/{{ funnel_id }}?q={{ search_query|urlencode }}&status_filter={{ selected_status|urlencode }}&next_call_date_filter={{ selected_next_call_date|urlencode }}">Вернуться в воронку</a>
     {% endif %}
 </section>
 
 <form method="post" action="/clients/{{ client.id }}/save" class="client-card">
     <input type="hidden" name="funnel_id" value="{{ funnel_id or '' }}">
-    <input type="hidden" name="search_inn" value="{{ search_inn }}">
+    <input type="hidden" name="search_query" value="{{ search_query }}">
     <input type="hidden" name="selected_status" value="{{ selected_status }}">
     <input type="hidden" name="selected_next_call_date" value="{{ selected_next_call_date }}">
 
