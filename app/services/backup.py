@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import shutil
+import sqlite3
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
@@ -12,5 +13,8 @@ def create_backup() -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     destination = settings.backup_dir / f"task_manager_{timestamp}.sqlite3"
     if settings.db_path.exists():
-        shutil.copy2(settings.db_path, destination)
+        source_uri = settings.db_path.resolve().as_uri() + "?mode=ro"
+        with closing(sqlite3.connect(source_uri, uri=True)) as source:
+            with closing(sqlite3.connect(destination)) as backup:
+                source.backup(backup)
     return destination
