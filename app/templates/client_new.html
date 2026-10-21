@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+    <div class="badge">Новый клиент</div>
+    <h1>Добавить клиента в свою воронку</h1>
+    <p class="muted">Клиент будет закреплён за вами и добавлен в выбранную воронку. ИНН проверяется по всей базе.</p>
+</section>
+<section class="panel">
+    {% if error %}<div class="error-box" role="alert">{{ error }}</div>{% endif %}
+    {% if existing_client_id %}<p><a class="secondary-link" href="/clients/{{ existing_client_id }}">Открыть существующую карточку</a></p>{% endif %}
+    {% if not funnels %}<div class="hint">В базе пока нет воронок. Обратитесь к руководителю.</div>{% endif %}
+    <form method="post" action="/clients/new" class="stack-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="form-grid">
+            <label><span>ИНН *</span>
+                <input type="text" name="tax_number" inputmode="numeric" pattern="[0-9]{10}|[0-9]{12}" minlength="10" maxlength="12" value="{{ values.tax_number }}" required>
+                <small class="muted">10 или 12 цифр. Начальные нули сохраняются.</small>
+            </label>
+            <label><span>Организация / ФИО ИП *</span>
+                <input type="text" name="company_name" maxlength="255" value="{{ values.company_name }}" required>
+            </label>
+            <label><span>ФИО контактного лица</span>
+                <input type="text" name="full_name" maxlength="255" value="{{ values.full_name }}">
+            </label>
+            <label><span>Телефон</span>
+                <input type="tel" name="phone" maxlength="64" value="{{ values.phone }}">
+            </label>
+            <label><span>Воронка *</span>
+                <select name="funnel_id" required>
+                    <option value="">Выберите воронку</option>
+                    {% for funnel in funnels %}<option value="{{ funnel.id }}" {% if values.funnel_id == funnel.id|string %}selected{% endif %}>{{ funnel.name }}</option>{% endfor %}
+                </select>
+            </label>
+        </div>
+        <p class="muted">Начальный статус — «Поиск контакта». Создание карточки не считается звонком или встречей.</p>
+        <div class="actions contact-actions">
+            <button type="submit" {% if not funnels %}disabled{% endif %}>Создать клиента</button>
+            <a class="secondary-link" href="/contacts">Мои звонки и встречи</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

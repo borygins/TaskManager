@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -108,3 +109,42 @@ class ActivityLog(Base):
 
     client: Mapped[Client] = relationship(back_populates="activities")
     actor: Mapped[User] = relationship(back_populates="activities")
+
+
+class ContactActivity(Base):
+    """A completed attempt/contact; report values are historical snapshots."""
+
+    __tablename__ = "contact_activities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    request_key: Mapped[str] = mapped_column(String(64), unique=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), index=True)
+    manager_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    funnel_id: Mapped[int] = mapped_column(ForeignKey("funnels.id"))
+    activity_date: Mapped[date] = mapped_column(Date, index=True)
+    activity_type: Mapped[str] = mapped_column(String(32))
+    # Kept for existing databases; derived from result on write, not used for counting.
+    dialogue: Mapped[bool] = mapped_column(Boolean)
+    result: Mapped[str] = mapped_column(String(64))
+    potential_turnover: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    next_activity_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    comment: Mapped[str] = mapped_column(Text)
+    tax_number: Mapped[str] = mapped_column(String(64))
+    company_name: Mapped[str] = mapped_column(String(255))
+    funnel_name: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    manager: Mapped[User] = relationship()
+
+
+class ContactReportState(Base):
+    """Durable retry marker, committed in the same transaction as a contact."""
+
+    __tablename__ = "contact_report_states"
+
+    manager_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    activity_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    pending: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_error: Mapped[str] = mapped_column(Text, default="")
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

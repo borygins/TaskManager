@@ -8,6 +8,7 @@ __pycache__/
 task_manager.sqlite3
 task_manager.sqlite3-*
 backups/
+reports/
 app/static/uploads/
 .env
 *.txt

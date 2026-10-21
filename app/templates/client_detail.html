@@ -1,10 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
+{% if request.query_params.get('created') == '1' %}
+<div class="hint" role="status">Клиент создан, закреплён за вами и добавлен в выбранную воронку. Теперь можно записать звонок или встречу.</div>
+{% endif %}
 <section class="hero compact">
     <div>
         <div class="badge">Карточка клиента</div>
         <h1>{{ client.full_name }}</h1>
         <p class="muted">Полная карточка клиента для детальной отработки активности.</p>
+        <a class="secondary-link" href="/clients/{{ client.id }}/contacts/new{% if funnel_id %}?funnel_id={{ funnel_id }}{% endif %}">Активность</a>
     </div>
     {% if funnel_id %}
     <a class="secondary-link" href="/funnels/{{ funnel_id }}?q={{ search_query|urlencode }}&status_filter={{ selected_status|urlencode }}&next_call_date_filter={{ selected_next_call_date|urlencode }}">Вернуться в воронку</a>
@@ -40,7 +44,7 @@
             <input type="date" name="last_call_date" value="{{ client.last_call_date.isoformat() if client.last_call_date else '' }}">
         </label>
         <label>
-            <span>Следующая дата звонка</span>
+            <span>Следующая дата активности</span>
             <input type="date" name="next_call_date" value="{{ client.next_call_date.isoformat() if client.next_call_date else '' }}">
         </label>
         <label>

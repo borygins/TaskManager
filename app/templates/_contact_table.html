@@ -1,0 +1,15 @@
+<div class="contact-table-scroll">
+    <table class="contact-table">
+        <thead><tr>{% for header in headers %}<th scope="col">{{ header }}</th>{% endfor %}</tr></thead>
+        <tbody>
+        {% for row in rows %}
+        <tr>
+            <td>{{ row.tax_number }}</td><td>{{ row.company_name }}</td>
+            <td>{{ row.potential if row.potential else '000000' }}</td><td>{{ row.channel }}</td>
+            <td>{{ row.status }}</td><td>{{ row.day.strftime('%d.%m.%Y') }}</td><td>{{ row.kind }}</td>
+            <td>{{ row.next_day.strftime('%d.%m.%Y') if row.next_day else '' }}</td><td class="contact-comment">{{ row.comment }}</td>
+        </tr>
+        {% else %}<tr><td colspan="9">За выбранный период записей нет.</td></tr>{% endfor %}
+        </tbody>
+    </table>
+</div>

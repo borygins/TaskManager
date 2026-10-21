@@ -35,6 +35,7 @@ class Settings:
     secret_key: str = "change-me-in-production"
     db_path: Path = BASE_DIR / "task_manager.sqlite3"
     backup_dir: Path = BASE_DIR / "backups"
+    reports_dir: Path = BASE_DIR / "reports"
     upload_dir: Path = BASE_DIR / "app" / "static" / "uploads"
     templates_dir: Path = BASE_DIR / "app" / "templates"
     static_dir: Path = BASE_DIR / "app" / "static"

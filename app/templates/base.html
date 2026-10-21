@@ -17,6 +17,9 @@
             {% if current_user %}
             <nav class="nav">
                 <a href="/dashboard">Главная</a>
+                <a href="/contacts">Мои звонки и встречи</a>
+                <a href="/clients/new">Добавить клиента</a>
+                <a href="/contacts/journal">Журнал за месяц</a>
                 <a href="/activity">Активность за сегодня</a>
                 <a href="/export">Выгрузить Excel</a>
                 {% if current_user.role == "boss" %}

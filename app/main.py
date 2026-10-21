@@ -14,12 +14,15 @@ from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.deps import get_boss_user, get_current_user
+from app.api.contacts import router as contacts_router
+from app.api.clients import router as clients_router
 from app.core.config import settings
 from app.core.security import hash_password, normalize_employee_id
 from app.db.session import SessionLocal, init_db
 from app.models import User
 from app.services.auth import authenticate_user
 from app.services.backup import create_backup
+from app.services.contact_reports import retry_pending_reports
 from app.services.excel import build_import_template, export_clients_to_workbook, import_clients_from_excel
 from app.services.seed import seed_defaults
 from app.services.task_service import (
@@ -49,12 +52,17 @@ async def lifespan(_: FastAPI):
         await seed_defaults(session)
         await session.commit()
 
+    await retry_pending_reports()
     if not scheduler.running:
         scheduler.add_job(
             create_backup,
             CronTrigger(hour=settings.backup_hour, minute=0),
             id="daily-backup",
             replace_existing=True,
+        )
+        scheduler.add_job(
+            retry_pending_reports, "interval", minutes=1,
+            id="contact-report-retry", replace_existing=True, max_instances=1,
         )
         scheduler.start()
 
@@ -67,6 +75,8 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=settings.secret_key, max_age=60 * 60 * 12)
 app.mount("/static", StaticFiles(directory=str(settings.static_dir)), name="static")
+app.include_router(contacts_router)
+app.include_router(clients_router)
 
 
 def render(request: Request, template_name: str, context: dict) -> HTMLResponse:

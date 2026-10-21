@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+    <div class="badge">Новый контакт</div>
+    <h1>{{ client.company_name or client.full_name }}</h1>
+    <p class="muted">ИНН {{ client.tax_number }} · {{ client.full_name }} · {{ client.phone or 'Телефон не указан' }}</p>
+    <div class="actions contact-actions">
+        <a class="secondary-link" href="/contacts">Мои звонки и встречи</a>
+        <a class="secondary-link" href="/clients/{{ client.id }}">Карточка клиента</a>
+    </div>
+</section>
+<section class="panel">
+    <h2>Результат активности</h2>
+    <p class="muted">Записывайте выполненный звонок или встречу. Следующая дата автоматически попадает в план. Обычное изменение карточки не считается контактом.</p>
+    {% if error %}<div class="error-box" role="alert">{{ error }}</div>{% endif %}
+    <form method="post" action="/clients/{{ client.id }}/contacts" class="stack-form" data-contact-form>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="submission_token" value="{{ values.submission_token }}">
+        <div class="form-grid">
+            <label><span>Дата активности</span>
+                <input type="date" name="activity_date" value="{{ values.activity_date }}" max="{{ today }}" required>
+            </label>
+            <label><span>Вид активности</span>
+                <select name="activity_type" required>
+                    {% for kind in ['Звонок', 'Встреча'] %}<option {% if values.activity_type == kind %}selected{% endif %}>{{ kind }}</option>{% endfor %}
+                </select>
+            </label>
+            <label><span>Канал поступления / воронка</span>
+                <select name="funnel_id" required>
+                    <option value="">Выберите воронку</option>
+                    {% for funnel in funnels %}<option value="{{ funnel.id }}" {% if values.funnel_id == funnel.id|string %}selected{% endif %}>{{ funnel.name }}</option>{% endfor %}
+                </select>
+            </label>
+            <label><span>Статус / результат</span>
+                <select name="result" required>
+                    <option value="">Выберите результат</option>
+                    {% for result in results %}<option {% if values.result == result %}selected{% endif %}>{{ result }}</option>{% endfor %}
+                </select>
+            </label>
+            <label><span>Потенциал оборота в месяц</span>
+                <input type="text" inputmode="decimal" name="potential_turnover" value="{{ values.potential_turnover }}" required>
+            </label>
+            <label><span>Дата следующей активности</span>
+                <input type="date" name="next_activity_date" value="{{ values.next_activity_date }}">
+                <small class="muted">Обязательна при недозвоне и переносе.</small>
+            </label>
+        </div>
+        <label><span>Комментарий</span><textarea name="comment" rows="4" maxlength="10000" required>{{ values.comment }}</textarea></label>
+        <div class="hint">Любой статус, кроме «Недозвон», засчитывается в норму. Один клиент — один контакт за день, независимо от числа звонков и встреч. Недозвоны сохраняются в истории.</div>
+        <button type="submit">Сохранить контакт</button>
+    </form>
+</section>
+<section class="panel">
+    <h2>История контактов клиента</h2>
+    <p class="muted">Последние 30 записей{% if current_user.role != 'boss' %} текущего менеджера{% endif %}.</p>
+    {% for item in history %}
+    <article class="activity-item">
+        <strong>{{ item.activity_date.strftime('%d.%m.%Y') }} · {{ item.activity_type }} · {{ item.result }}</strong>
+        <p class="activity-body">{{ item.comment }}</p>
+        <div class="muted">{{ item.manager.full_name }} · {{ item.funnel_name }} · Следующая дата: {{ item.next_activity_date.strftime('%d.%m.%Y') if item.next_activity_date else 'не назначена' }}</div>
+    </article>
+    {% else %}<div class="empty-state">Контактов ещё нет. Старый журнал изменений не преобразуется в звонки автоматически.</div>{% endfor %}
+</section>
+{% endblock %}

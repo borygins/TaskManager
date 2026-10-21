@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% macro client_list(clients) %}
+    {% for client in clients %}
+    <div class="contact-plan-row">
+        <div><strong>{{ client.company_name or client.full_name }}</strong>
+            <div class="muted">ИНН {{ client.tax_number }} · {{ client.phone or 'Телефон не указан' }}</div>
+            <div class="muted">{{ client.status }}{% if client.next_call_date %} · {{ client.next_call_date.strftime('%d.%m.%Y') }}{% endif %}</div>
+        </div>
+        <a class="secondary-link" href="/clients/{{ client.id }}/contacts/new">Активность</a>
+    </div>
+    {% else %}<div class="empty-state">Клиентов нет.</div>{% endfor %}
+{% endmacro %}
+{% block content %}
+<section class="hero compact">
+    <div class="badge">Рабочий день</div>
+    <h1>Мои звонки и встречи</h1>
+    <p>Контактов за {{ day.strftime('%d.%m.%Y') }}: <strong>{{ completed }} из 20</strong></p>
+    <progress class="contact-progress" value="{{ [completed, 20]|min }}" max="20">{{ completed }} из 20</progress>
+    <p class="muted">Уникальные клиенты с любым статусом, кроме «Недозвон». Повторные звонки и встречи с тем же клиентом не увеличивают норму.</p>
+    <div class="actions contact-actions">
+        <a class="secondary-link" href="/clients/new">Добавить клиента</a>
+        <a class="secondary-link" href="/contacts/export?day={{ day.isoformat() }}&manager_id={{ current_user.id }}">Скачать Excel за день</a>
+        <a class="secondary-link" href="/contacts/journal?month={{ day.strftime('%Y-%m') }}{% if current_user.role == 'boss' %}&manager_id={{ current_user.id }}{% endif %}">Журнал за месяц</a>
+    </div>
+</section>
+{% if request.query_params.get('saved') %}<div class="hint" role="status">Контакт сохранён в базе.</div>{% endif %}
+{% if report_state and report_state.pending %}
+<section class="panel">
+    <div class="error-box" role="alert">{{ report_state.last_error or 'Excel ожидает обновления.' }} Контакты сохранены. Повторная попытка выполняется автоматически; также можно скачать свежий отчёт кнопкой выше.</div>
+    <form method="post" action="/contacts/report/retry">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="day" value="{{ day.isoformat() }}">
+        <button type="submit">Повторить сохранение файла</button>
+    </form>
+</section>
+{% elif report_state %}<p class="muted">Дневной Excel обновлён {{ report_state.generated_at.strftime('%d.%m.%Y %H:%M') if report_state.generated_at else '' }}. Файл доступен в папке reports приложения.</p>{% endif %}
+<section class="panel">
+    <form method="get" class="filter-grid">
+        <label><span>Дата плана и отчёта</span><input type="date" name="day" value="{{ day.isoformat() }}" required></label>
+        <label><span>Найти своего клиента</span><input type="search" name="q" value="{{ q }}" placeholder="ИНН, ФИО или организация"></label>
+        <div class="filter-actions"><button type="submit">Показать</button><a class="secondary-link" href="/contacts">Сегодня</a></div>
+    </form>
+    <p class="muted">План показывает текущие назначения. История выполненных контактов за выбранную дату — ниже.</p>
+    {% if q.strip() %}<h2>Результаты поиска</h2><p class="muted">До 100 клиентов. Для более точного поиска уточните запрос.</p>{{ client_list(found) }}{% endif %}
+</section>
+<section class="panel"><h2>Просроченные к {{ day.strftime('%d.%m.%Y') }} · {{ overdue|length }}</h2>{{ client_list(overdue) }}</section>
+<section class="panel"><h2>Назначено на {{ day.strftime('%d.%m.%Y') }} · {{ due|length }}</h2>{{ client_list(due) }}</section>
+<section class="panel" id="unscheduled-clients">
+    <h2>Без следующей даты · {{ unscheduled|length }}</h2>
+    <p class="muted">Ваши клиенты без назначенной следующей активности, независимо от выбранного дня. Нажмите на строку, чтобы открыть и изменить карточку клиента.</p>
+    {% if unscheduled %}
+    <div class="contact-table-scroll">
+        <div class="unscheduled-client-grid unscheduled-client-header" aria-hidden="true">
+            <span>ИНН</span><span>Организация / ФИО</span><span>Телефон</span><span>Статус</span>
+        </div>
+        {% for client in unscheduled %}
+        <a class="unscheduled-client-grid unscheduled-client-row" href="/clients/{{ client.id }}">
+            <span>{{ client.tax_number }}</span>
+            <strong>{{ client.company_name or client.full_name }}</strong>
+            <span>{{ client.phone or 'Телефон не указан' }}</span>
+            <span>{{ client.status }}</span>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}<div class="empty-state">Клиентов без следующей даты нет.</div>{% endif %}
+</section>
+<section class="panel"><h2>Журнал за день</h2>{% include '_contact_table.html' %}</section>
+{% endblock %}
