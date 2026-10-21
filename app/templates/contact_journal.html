@@ -17,7 +17,7 @@
 {% if selected_manager %}
 <section class="panel">
     <h2>{{ selected_manager.full_name }} · {{ month }}</h2>
-    <p><a class="secondary-link" href="/contacts/export?month={{ month }}&manager_id={{ selected_manager.id }}">Скачать Excel за месяц</a></p>
+    <p><a class="secondary-link" href="/contacts/export?month={{ month }}&manager_id={{ selected_manager.id }}" data-export-confirm>Скачать Excel за месяц</a></p>
     {% include '_contact_table.html' %}
 </section>
 {% else %}<div class="empty-state">Выберите менеджера для просмотра и выгрузки журнала.</div>{% endif %}

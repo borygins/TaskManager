@@ -19,7 +19,7 @@
     <p class="muted">Уникальные клиенты с любым статусом, кроме «Недозвон». Повторные звонки и встречи с тем же клиентом не увеличивают норму.</p>
     <div class="actions contact-actions">
         <a class="secondary-link" href="/clients/new">Добавить клиента</a>
-        <a class="secondary-link" href="/contacts/export?day={{ day.isoformat() }}&manager_id={{ current_user.id }}">Скачать Excel за день</a>
+        <a class="secondary-link" href="/contacts/export?day={{ day.isoformat() }}&manager_id={{ current_user.id }}" data-export-confirm>Скачать Excel за день</a>
         <a class="secondary-link" href="/contacts/journal?month={{ day.strftime('%Y-%m') }}{% if current_user.role == 'boss' %}&manager_id={{ current_user.id }}{% endif %}">Журнал за месяц</a>
     </div>
 </section>

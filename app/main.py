@@ -7,10 +7,10 @@ from urllib.parse import urlencode
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
-from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, select
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.deps import get_boss_user, get_current_user
@@ -19,7 +19,7 @@ from app.api.clients import router as clients_router
 from app.core.config import settings
 from app.core.security import hash_password, normalize_employee_id
 from app.db.session import SessionLocal, init_db
-from app.models import User
+from app.models import Client, User
 from app.services.auth import authenticate_user
 from app.services.backup import create_backup
 from app.services.contact_reports import retry_pending_reports
@@ -558,10 +558,23 @@ async def activity_page(
 
 
 @app.get("/export")
-async def export_excel(current_user: User = Depends(get_current_user)) -> StreamingResponse:
+async def export_excel(request: Request, preview: bool = False, confirmed: bool = False,
+                       current_user: User = Depends(get_current_user)) -> Response:
     async with SessionLocal() as session:
         user = await session.get(User, current_user.id)
         manager_id = None if user.role == "boss" else user.id
+        if preview or not confirmed:
+            statement = select(func.count(Client.id))
+            if manager_id is not None:
+                statement = statement.where(Client.assigned_manager_id == manager_id)
+            count = (await session.execute(statement)).scalar_one()
+            if preview:
+                return JSONResponse({"count": count}, headers={"Cache-Control": "no-store"})
+            response = render(request, "export_confirm.html", {
+                "current_user": user, "count": count,
+            })
+            response.headers["Cache-Control"] = "no-store"
+            return response
         file_bytes = await export_clients_to_workbook(session=session, manager_id=manager_id)
     return StreamingResponse(
         iter([file_bytes]),

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+import json
 import re
 import unittest
 from datetime import date, timedelta
@@ -78,7 +79,7 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         if self.cookies:
             headers.append((b"cookie", self.cookies.encode()))
         scope = {
-            "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1",
+            "type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"}, "http_version": "1.1",
             "method": method, "scheme": "http", "path": parsed.path, "raw_path": parsed.path.encode(),
             "query_string": parsed.query.encode(), "root_path": "", "headers": headers,
             "client": ("127.0.0.1", 12345), "server": ("testserver", 80),
@@ -129,6 +130,60 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         section = re.search(r'<section class="panel" id="unscheduled-clients">(.*?)</section>', body.decode(), re.S)
         self.assertIsNotNone(section)
         return section.group(1)
+
+    async def test_export_preview_counts_visible_clients(self):
+        with patch("app.main.SessionLocal", self.factory), patch("app.main.export_clients_to_workbook") as build:
+            for user, expected in ((self.manager, 2), (self.other, 1), (self.boss, 3)):
+                self.active_user = user
+                status, headers, body = await self.request("GET", "/export?preview=true")
+                self.assertEqual(status, 200)
+                self.assertEqual(json.loads(body), {"count": expected})
+                self.assertEqual(headers["cache-control"], "no-store")
+            build.assert_not_called()
+
+    async def test_main_export_requires_confirmation_without_javascript(self):
+        with patch("app.main.SessionLocal", self.factory):
+            with patch("app.main.export_clients_to_workbook") as build:
+                for user, expected in ((self.manager, 2), (self.boss, 3)):
+                    self.active_user = user
+                    status, headers, body = await self.request("GET", "/export")
+                    self.assertEqual(status, 200)
+                    self.assertIn("text/html", headers["content-type"])
+                    self.assertNotIn("content-disposition", headers)
+                    self.assertIn(f"Выгрузить {expected} записей клиентов?", body.decode())
+                    self.assertIn('href="/export?confirmed=true"', body.decode())
+                    self.assertIn('href="/dashboard">Отмена</a>', body.decode())
+                    self.assertIn("app.js?v=export-confirm-2", body.decode())
+                build.assert_not_called()
+            self.active_user = self.manager
+            status, headers, body = await self.request("GET", "/export?confirmed=true")
+            self.assertEqual(status, 200)
+            self.assertIn("attachment", headers["content-disposition"])
+            workbook = load_workbook(BytesIO(body))
+            self.assertEqual(workbook.active.max_row, 3)
+            workbook.close()
+
+    async def test_contact_export_preview_counts_aggregated_rows_and_checks_access(self):
+        status, _, body = await self.request("GET", "/contacts/export?preview=true")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"count": 0})
+        await self.save(comment="Первый звонок")
+        await self.save(comment="Повторный звонок")
+        await self.save(self.second_client.id, result="Недозвон", next_activity_date=self.today.isoformat())
+        earlier = self.today.replace(day=1) - timedelta(days=1)
+        await self.save(activity_date=earlier.isoformat())
+        with patch("app.api.contacts.build_contact_workbook") as build:
+            for period in (f"day={self.today.isoformat()}", f"month={self.today:%Y-%m}"):
+                status, _, body = await self.request("GET", f"/contacts/export?preview=true&{period}")
+                self.assertEqual(status, 200)
+                self.assertEqual(json.loads(body), {"count": 2})
+            status, _, _ = await self.request("GET", f"/contacts/export?preview=true&manager_id={self.other.id}")
+            self.assertEqual(status, 403)
+            self.active_user = self.boss
+            status, _, body = await self.request("GET", f"/contacts/export?preview=true&manager_id={self.manager.id}&month={earlier:%Y-%m}")
+            self.assertEqual(status, 200)
+            self.assertEqual(json.loads(body), {"count": 1})
+            build.assert_not_called()
 
     async def test_unscheduled_list_contains_only_owned_clients_without_date(self):
         section = await self.unscheduled_section()

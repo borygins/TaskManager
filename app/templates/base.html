@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title if title else "Sales Task Manager" }}</title>
     <link rel="stylesheet" href="{{ url_for('static', path='css/styles.css') }}">
-    <script defer src="{{ url_for('static', path='js/app.js') }}"></script>
+    <script defer src="{{ url_for('static', path='js/app.js') }}?v=export-confirm-2"></script>
 </head>
 <body>
     <div class="app-shell">
@@ -21,7 +21,7 @@
                 <a href="/clients/new">Добавить клиента</a>
                 <a href="/contacts/journal">Журнал за месяц</a>
                 <a href="/activity">Активность за сегодня</a>
-                <a href="/export">Выгрузить Excel</a>
+                <a href="/export" data-export-confirm>Выгрузить Excel</a>
                 {% if current_user.role == "boss" %}
                 <a href="/boss/distribution">Распределение клиентов</a>
                 <a href="/boss/users">Пользователи</a>

@@ -7,7 +7,7 @@ from datetime import date
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy import func, or_, select
@@ -201,6 +201,7 @@ async def contact_journal(request: Request, month: str | None = None, manager_id
 
 @router.get("/contacts/export")
 async def export_contacts(day: str | None = None, month: str | None = None, manager_id: int | None = None,
+                          preview: bool = False,
                           user: User = Depends(get_current_user)):
     if day and month:
         raise HTTPException(400, "Выберите день или месяц, не оба периода одновременно.")
@@ -208,6 +209,8 @@ async def export_contacts(day: str | None = None, month: str | None = None, mana
     async with SessionLocal() as session:
         manager = await report_manager(session, user, manager_id)
         rows = aggregate_contacts(await list_contacts(session, manager.id, start, end))
+    if preview:
+        return JSONResponse({"count": len(rows)}, headers={"Cache-Control": "no-store"})
     period = start.strftime("%m.%Y" if month else "%d.%m.%Y")
     content = await asyncio.to_thread(build_contact_workbook, rows, manager.full_name, period)
     suffix = start.strftime("%Y-%m" if month else "%Y-%m-%d")

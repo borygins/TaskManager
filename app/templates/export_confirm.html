@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+    <h1>Выгрузить {{ count }} записей клиентов?</h1>
+    <div class="actions contact-actions">
+        <a class="secondary-link" href="/export?confirmed=true">Выгрузить</a>
+        <a class="secondary-link" href="/dashboard">Отмена</a>
+    </div>
+</section>
+{% endblock %}
