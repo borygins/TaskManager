@@ -2,8 +2,12 @@
 {% block content %}
 <section class="hero compact">
     <div class="badge">Новый клиент</div>
-    <h1>Добавить клиента в свою воронку</h1>
+    <h1>Добавить клиента в воронку</h1>
+    {% if current_user.role == 'boss' %}
+    <p class="muted">Клиент будет добавлен в выбранную воронку без закрепления за менеджером. ИНН проверяется по всей базе.</p>
+    {% else %}
     <p class="muted">Клиент будет закреплён за вами и добавлен в выбранную воронку. ИНН проверяется по всей базе.</p>
+    {% endif %}
 </section>
 <section class="panel">
     {% if error %}<div class="error-box" role="alert">{{ error }}</div>{% endif %}
@@ -35,7 +39,11 @@
         <p class="muted">Начальный статус — «Поиск контакта». Создание карточки не считается звонком или встречей.</p>
         <div class="actions contact-actions">
             <button type="submit" {% if not funnels %}disabled{% endif %}>Создать клиента</button>
+            {% if current_user.role == 'boss' %}
+            <a class="secondary-link" href="/boss/distribution">Распределение клиентов</a>
+            {% else %}
             <a class="secondary-link" href="/contacts">Мои звонки и встречи</a>
+            {% endif %}
         </div>
     </form>
 </section>

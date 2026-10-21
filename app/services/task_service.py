@@ -219,12 +219,12 @@ async def update_client_task(
         changes.append(f"Комментарий к активности: {comment_body}")
 
     manager_id_raw = form_data.get("assigned_manager_id")
-    if actor.role == "boss" and manager_id_raw:
-        new_manager_id = int(manager_id_raw)
+    if actor.role == "boss" and manager_id_raw is not None:
+        new_manager_id = int(manager_id_raw) if manager_id_raw.strip() else None
         old_manager_id = client.assigned_manager_id
         if old_manager_id != new_manager_id:
             old_manager = await session.get(User, old_manager_id) if old_manager_id else None
-            new_manager = await session.get(User, new_manager_id)
+            new_manager = await session.get(User, new_manager_id) if new_manager_id is not None else None
             client.assigned_manager_id = new_manager_id
             changes.append(
                 build_change_message(

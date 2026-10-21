@@ -58,7 +58,8 @@ async def create_client(session: AsyncSession, actor: User, data: NewClientInput
         raise ValueError("Выбранная воронка не найдена. Выберите существующую воронку.")
     client = Client(
         tax_number=data.tax_number, company_name=data.company_name, full_name=data.full_name,
-        phone=data.phone, assigned_manager_id=actor.id, status="Поиск контакта",
+        phone=data.phone, assigned_manager_id=actor.id if actor.role == "manager" else None,
+        status="Поиск контакта",
         last_manager_activity_date=date.today(),
     )
     session.add(client)

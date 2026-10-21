@@ -282,6 +282,71 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         await self.save(client_id, comment="Первый звонок новому клиенту")
         self.assertTrue((await self.report_rows())[0].qualified)
 
+    async def test_boss_creates_unassigned_client_and_card_preserves_empty_assignment(self):
+        self.active_user = self.boss
+        fields = await self.new_client_fields(assigned_manager_id=str(self.manager.id))
+        status, headers, _ = await self.request("POST", "/clients/new", fields)
+        self.assertEqual(status, 303)
+        async with self.factory() as session:
+            client = (await session.execute(select(Client).where(Client.tax_number == fields["tax_number"]))).scalar_one()
+            client_id = client.id
+            self.assertIsNone(client.assigned_manager_id)
+            links = list((await session.execute(select(ClientFunnel).where(ClientFunnel.client_id == client_id))).scalars())
+            self.assertEqual([link.funnel_id for link in links], [self.funnel.id])
+        with patch("app.main.SessionLocal", self.factory):
+            status, _, body = await self.request("GET", headers["location"])
+            self.assertEqual(status, 200)
+            self.assertIn('<option value="" selected>Не назначен</option>', body.decode())
+            self.assertIn("без закрепления за менеджером", body.decode())
+            status, _, _ = await self.request("POST", f"/clients/{client_id}/save", {
+                "assigned_manager_id": "", "phone": "12345",
+            })
+            self.assertEqual(status, 303)
+        async with self.factory() as session:
+            client = await session.get(Client, client_id)
+            self.assertIsNone(client.assigned_manager_id)
+            self.assertEqual(client.phone, "12345")
+
+    async def test_boss_can_unassign_and_reassign_without_changing_on_missing_field(self):
+        self.active_user = self.boss
+        with patch("app.main.SessionLocal", self.factory):
+            for fields, expected in (
+                ({"phone": "12345"}, self.manager.id),
+                ({"assigned_manager_id": ""}, None),
+                ({"assigned_manager_id": str(self.other.id)}, self.other.id),
+                ({"phone": "67890"}, self.other.id),
+            ):
+                status, _, _ = await self.request("POST", f"/clients/{self.client.id}/save", fields)
+                self.assertEqual(status, 303)
+                async with self.factory() as session:
+                    client = await session.get(Client, self.client.id)
+                    self.assertEqual(client.assigned_manager_id, expected)
+
+    async def test_manager_cannot_clear_or_change_assignment(self):
+        with patch("app.main.SessionLocal", self.factory):
+            for value in ("", str(self.other.id)):
+                status, _, _ = await self.request("POST", f"/clients/{self.client.id}/save", {"assigned_manager_id": value})
+                self.assertEqual(status, 303)
+                async with self.factory() as session:
+                    client = await session.get(Client, self.client.id)
+                    self.assertEqual(client.assigned_manager_id, self.manager.id)
+
+    async def test_legacy_boss_assignment_is_not_silently_replaced_in_card(self):
+        async with self.factory() as session:
+            client = await session.get(Client, self.client.id)
+            client.assigned_manager_id = self.boss.id
+            await session.commit()
+        self.active_user = self.boss
+        with patch("app.main.SessionLocal", self.factory):
+            status, _, body = await self.request("GET", f"/clients/{self.client.id}")
+            self.assertEqual(status, 200)
+            self.assertIn(f'<option value="{self.boss.id}" selected disabled>', body.decode())
+            status, _, _ = await self.request("POST", f"/clients/{self.client.id}/save", {"phone": "12345"})
+            self.assertEqual(status, 303)
+        async with self.factory() as session:
+            client = await session.get(Client, self.client.id)
+            self.assertEqual(client.assigned_manager_id, self.boss.id)
+
     async def test_duplicate_inn_does_not_reassign_or_change_client(self):
         async with self.factory() as session:
             unassigned = Client(full_name="Без менеджера", company_name="Свободный клиент", tax_number="001111111112")

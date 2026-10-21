@@ -1,7 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
 {% if request.query_params.get('created') == '1' %}
+{% if current_user.role == 'boss' %}
+<div class="hint" role="status">Клиент создан и добавлен в выбранную воронку без закрепления за менеджером.</div>
+{% else %}
 <div class="hint" role="status">Клиент создан, закреплён за вами и добавлен в выбранную воронку. Теперь можно записать звонок или встречу.</div>
+{% endif %}
 {% endif %}
 <section class="hero compact">
     <div>
@@ -79,6 +83,10 @@
         <label>
             <span>Ответственный менеджер</span>
             <select name="assigned_manager_id">
+                <option value="" {% if client.assigned_manager_id is none %}selected{% endif %}>Не назначен</option>
+                {% if client.assigned_manager and client.assigned_manager.role != 'manager' %}
+                <option value="{{ client.assigned_manager_id }}" selected disabled>{{ client.assigned_manager.full_name }} — прежнее назначение, выберите менеджера или «Не назначен»</option>
+                {% endif %}
                 {% for manager in managers %}
                 <option value="{{ manager.id }}" {% if client.assigned_manager_id == manager.id %}selected{% endif %}>{{ manager.full_name }} ({{ manager.employee_id }})</option>
                 {% endfor %}
