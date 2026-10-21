@@ -385,7 +385,7 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
             await session.commit()
         section = await self.unscheduled_section()
         self.assertIn("Клиентов без следующей даты нет.", section)
-        self.assertNotIn('class="unscheduled-client-grid unscheduled-client-row"', section)
+        self.assertNotIn('class="client-list-grid client-list-row"', section)
 
     async def new_client_fields(self, **changes):
         status, _, body = await self.request("GET", f"/clients/new?funnel_id={self.funnel.id}")
