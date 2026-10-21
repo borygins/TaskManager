@@ -141,6 +141,18 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(headers["cache-control"], "no-store")
             build.assert_not_called()
 
+    async def test_navigation_hides_personal_contacts_for_boss(self):
+        for user in (self.manager, self.boss):
+            self.active_user = user
+            status, _, body = await self.request("GET", "/contacts/journal")
+            self.assertEqual(status, 200)
+            navigation = re.search(r'<nav class="nav">(.*?)</nav>', body.decode(), re.S).group(1)
+            if user.role == "boss":
+                self.assertNotIn('href="/contacts"', navigation)
+            else:
+                self.assertIn('href="/contacts">Мои звонки и встречи</a>', navigation)
+            self.assertIn('href="/contacts/journal"', navigation)
+
     async def test_main_export_requires_confirmation_without_javascript(self):
         with patch("app.main.SessionLocal", self.factory):
             with patch("app.main.export_clients_to_workbook") as build:
