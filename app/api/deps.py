@@ -43,6 +43,12 @@ async def get_boss_user(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
+async def get_manager_user(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != "manager":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Запись звонков и встреч доступна только менеджерам.")
+    return current_user
+
+
 async def find_user_by_employee_id(employee_id: str, session: AsyncSession) -> User | None:
     result = await session.execute(select(User).where(User.employee_id == employee_id))
     return result.scalar_one_or_none()

@@ -73,7 +73,9 @@ def parse_contact(form: dict[str, str]) -> ContactInput:
 async def record_contact(
     session: AsyncSession, client: Client, actor: User, data: ContactInput, request_key: str,
 ) -> ContactActivity:
-    if actor.role != "boss" and client.assigned_manager_id != actor.id:
+    if actor.role != "manager":
+        raise PermissionError("Запись звонков и встреч доступна только менеджерам.")
+    if client.assigned_manager_id != actor.id:
         raise PermissionError("Нет доступа к клиенту.")
     existing = (await session.execute(
         select(ContactActivity).where(ContactActivity.request_key == request_key)

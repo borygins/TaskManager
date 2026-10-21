@@ -36,7 +36,7 @@
                 </select>
             </label>
         </div>
-        <p class="muted">Начальный статус — «Поиск контакта». Создание карточки не считается звонком или встречей.</p>
+        <p class="muted">Начальный статус — «Поиск контакта».{% if current_user.role == 'manager' %} Создание карточки не считается звонком или встречей.{% endif %}</p>
         <div class="actions contact-actions">
             <button type="submit" {% if not funnels %}disabled{% endif %}>Создать клиента</button>
             {% if current_user.role == 'boss' %}

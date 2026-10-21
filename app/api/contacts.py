@@ -14,7 +14,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_manager_user
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models import Client, ContactActivity, ContactReportState, Funnel, User
@@ -72,6 +72,10 @@ async def report_manager(session, user: User, manager_id: int | None) -> User:
     manager = await session.get(User, manager_id)
     if not manager:
         raise HTTPException(404, "Менеджер не найден.")
+    if manager.role != "manager":
+        history = await session.scalar(select(ContactActivity.id).where(ContactActivity.manager_id == manager.id).limit(1))
+        if history is None:
+            raise HTTPException(403, "У выбранного пользователя нет журнала менеджера.")
     return manager
 
 
@@ -80,12 +84,10 @@ async def form_response(request: Request, client_id: int, user: User, values=Non
         client = await session.get(Client, client_id)
         if not client:
             raise HTTPException(404, "Клиент не найден.")
-        if user.role != "boss" and client.assigned_manager_id != user.id:
+        if client.assigned_manager_id != user.id:
             raise HTTPException(403, "Нет доступа к клиенту.")
         funnels = list((await session.execute(select(Funnel).order_by(Funnel.name))).scalars())
-        query = select(ContactActivity).where(ContactActivity.client_id == client.id)
-        if user.role != "boss":
-            query = query.where(ContactActivity.manager_id == user.id)
+        query = select(ContactActivity).where(ContactActivity.client_id == client.id, ContactActivity.manager_id == user.id)
         history = list((await session.execute(query.options(joinedload(ContactActivity.manager)).order_by(
             ContactActivity.activity_date.desc(), ContactActivity.id.desc(),
         ).limit(30))).scalars())
@@ -110,12 +112,12 @@ async def form_response(request: Request, client_id: int, user: User, values=Non
 
 
 @router.get("/clients/{client_id}/contacts/new", response_class=HTMLResponse)
-async def contact_form(request: Request, client_id: int, user: User = Depends(get_current_user)):
+async def contact_form(request: Request, client_id: int, user: User = Depends(get_manager_user)):
     return await form_response(request, client_id, user)
 
 
 @router.post("/clients/{client_id}/contacts")
-async def create_contact(request: Request, client_id: int, user: User = Depends(get_current_user)):
+async def create_contact(request: Request, client_id: int, user: User = Depends(get_manager_user)):
     form = {key: str(value) for key, value in (await request.form()).items()}
     check_csrf(request, form)
     try:
@@ -154,7 +156,7 @@ async def create_contact(request: Request, client_id: int, user: User = Depends(
 
 
 @router.get("/contacts", response_class=HTMLResponse)
-async def contacts_page(request: Request, day: str | None = None, q: str = "", user: User = Depends(get_current_user)):
+async def contacts_page(request: Request, day: str | None = None, q: str = "", user: User = Depends(get_manager_user)):
     selected_day = parse_day(day)
     async with SessionLocal() as session:
         rows = aggregate_contacts(await list_contacts(session, user.id, selected_day, selected_day))
@@ -187,7 +189,10 @@ async def contact_journal(request: Request, month: str | None = None, manager_id
     start, end = month_bounds(month)
     async with SessionLocal() as session:
         # Include former managers so their historical reports remain accessible.
-        managers = list((await session.execute(select(User).order_by(User.full_name))).scalars()) if user.role == "boss" else []
+        has_history = select(ContactActivity.id).where(ContactActivity.manager_id == User.id).exists()
+        managers = list((await session.execute(
+            select(User).where(or_(User.role == "manager", has_history)).order_by(User.full_name)
+        )).scalars()) if user.role == "boss" else []
         manager = None
         rows = []
         if user.role != "boss" or manager_id is not None:
@@ -220,7 +225,7 @@ async def export_contacts(day: str | None = None, month: str | None = None, mana
 
 
 @router.post("/contacts/report/retry")
-async def retry_report(request: Request, user: User = Depends(get_current_user)):
+async def retry_report(request: Request, user: User = Depends(get_manager_user)):
     form = {key: str(value) for key, value in (await request.form()).items()}
     check_csrf(request, form)
     day = parse_day(form.get("day"))

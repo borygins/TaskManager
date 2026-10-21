@@ -153,6 +153,59 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn('href="/contacts">Мои звонки и встречи</a>', navigation)
             self.assertIn('href="/contacts/journal"', navigation)
 
+    async def test_boss_has_no_personal_contact_controls_or_routes(self):
+        fields = await self.new_form()
+        self.active_user = self.boss
+        with patch("app.main.SessionLocal", self.factory):
+            for path in ("/clients/new", f"/clients/{self.client.id}", "/contacts/journal"):
+                status, _, body = await self.request("GET", path)
+                self.assertEqual(status, 200)
+                text = body.decode()
+                self.assertNotIn("Мои звонки и встречи", text)
+                self.assertNotIn('href="/contacts"', text)
+                self.assertNotIn(f'/clients/{self.client.id}/contacts/new', text)
+            for method, path, form in (
+                ("GET", "/contacts", None),
+                ("GET", f"/clients/{self.client.id}/contacts/new", None),
+                ("POST", f"/clients/{self.client.id}/contacts", fields),
+                ("POST", "/contacts/report/retry", {"day": self.today.isoformat(), "csrf_token": fields["csrf_token"]}),
+            ):
+                status, _, _ = await self.request(method, path, form)
+                self.assertEqual(status, 403, path)
+        async with self.factory() as session:
+            for model in (ContactActivity, ContactReportState):
+                self.assertEqual(await session.scalar(select(func.count()).select_from(model)), 0)
+
+    async def test_service_rejects_contact_created_by_boss(self):
+        from app.services.contacts import parse_contact, record_contact
+        data = parse_contact(await self.new_form())
+        async with self.factory() as session:
+            client = await session.get(Client, self.client.id)
+            with self.assertRaises(PermissionError):
+                await record_contact(session, client, self.boss, data, "boss-forbidden")
+            self.assertEqual(await session.scalar(select(func.count()).select_from(ContactActivity)), 0)
+
+    async def test_boss_report_selector_excludes_non_managers_without_history(self):
+        await self.save()
+        # Promoting a manager must not hide the contacts they previously recorded.
+        async with self.factory() as session:
+            manager = await session.get(User, self.manager.id)
+            manager.role = "boss"
+            await session.commit()
+        self.active_user = self.boss
+        status, _, body = await self.request("GET", "/contacts/journal")
+        self.assertEqual(status, 200)
+        selector = re.search(r'<select name="manager_id".*?</select>', body.decode(), re.S).group(0)
+        self.assertIn(f'value="{self.manager.id}"', selector)
+        self.assertIn(f'value="{self.other.id}"', selector)
+        self.assertNotIn(f'value="{self.boss.id}"', selector)
+        status, _, body = await self.request("GET", f"/contacts/export?preview=true&manager_id={self.manager.id}")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"count": 1})
+        for path in ("/contacts/journal", "/contacts/export"):
+            status, _, _ = await self.request("GET", f"{path}?manager_id={self.boss.id}")
+            self.assertEqual(status, 403)
+
     async def test_main_export_requires_confirmation_without_javascript(self):
         with patch("app.main.SessionLocal", self.factory):
             with patch("app.main.export_clients_to_workbook") as build:

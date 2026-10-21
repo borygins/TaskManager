@@ -20,7 +20,7 @@
     <div class="actions contact-actions">
         <a class="secondary-link" href="/clients/new">Добавить клиента</a>
         <a class="secondary-link" href="/contacts/export?day={{ day.isoformat() }}&manager_id={{ current_user.id }}" data-export-confirm>Скачать Excel за день</a>
-        <a class="secondary-link" href="/contacts/journal?month={{ day.strftime('%Y-%m') }}{% if current_user.role == 'boss' %}&manager_id={{ current_user.id }}{% endif %}">Журнал за месяц</a>
+        <a class="secondary-link" href="/contacts/journal?month={{ day.strftime('%Y-%m') }}">Журнал за месяц</a>
     </div>
 </section>
 {% if request.query_params.get('saved') %}<div class="hint" role="status">Контакт сохранён в базе.</div>{% endif %}

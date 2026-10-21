@@ -12,7 +12,9 @@
         <div class="badge">Карточка клиента</div>
         <h1>{{ client.full_name }}</h1>
         <p class="muted">Полная карточка клиента для детальной отработки активности.</p>
+        {% if current_user.role == 'manager' %}
         <a class="secondary-link" href="/clients/{{ client.id }}/contacts/new{% if funnel_id %}?funnel_id={{ funnel_id }}{% endif %}">Активность</a>
+        {% endif %}
     </div>
     {% if funnel_id %}
     <a class="secondary-link" href="/funnels/{{ funnel_id }}?q={{ search_query|urlencode }}&status_filter={{ selected_status|urlencode }}&next_call_date_filter={{ selected_next_call_date|urlencode }}">Вернуться в воронку</a>
