@@ -29,7 +29,7 @@
 </section>
 <section class="panel">
     <h2>Результат активности</h2>
-    <p class="muted">Записывайте выполненный звонок или встречу. Следующая дата автоматически попадает в план. Обычное изменение карточки не считается контактом.</p>
+    <p class="muted">Записывайте выполненный звонок или встречу. Следующая дата автоматически попадает в план. Канал берётся из первой воронки клиента, а без воронок указывается «Прочее». Обычное изменение карточки не считается контактом.</p>
     {% if error %}<div class="error-box" role="alert">{{ error }}</div>{% endif %}
     <form method="post" action="/clients/{{ client.id }}/contacts" class="stack-form" data-contact-form>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -41,12 +41,6 @@
             <label><span>Вид активности</span>
                 <select name="activity_type" required>
                     {% for kind in ['Звонок', 'Встреча'] %}<option {% if values.activity_type == kind %}selected{% endif %}>{{ kind }}</option>{% endfor %}
-                </select>
-            </label>
-            <label><span>Канал поступления / воронка</span>
-                <select name="funnel_id" required>
-                    <option value="">Выберите воронку</option>
-                    {% for funnel in funnels %}<option value="{{ funnel.id }}" {% if values.funnel_id == funnel.id|string %}selected{% endif %}>{{ funnel.name }}</option>{% endfor %}
                 </select>
             </label>
             <label><span>Статус / результат</span>

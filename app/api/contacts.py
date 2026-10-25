@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from app.api.deps import get_current_user, get_manager_user
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.models import Client, ContactActivity, ContactReportState, Funnel, User
+from app.models import Client, ContactActivity, ContactReportState, User
 from app.services.contact_reports import REPORT_HEADERS, build_contact_workbook, generate_daily_report
 from app.services.contacts import CONTACT_RESULTS, aggregate_contacts, list_contacts, parse_contact, record_contact
 from app.services.task_service import get_client_with_details
@@ -86,14 +86,10 @@ async def form_response(request: Request, client_id: int, user: User, values=Non
             raise HTTPException(404, "Клиент не найден.")
         if client.assigned_manager_id != user.id:
             raise HTTPException(403, "Нет доступа к клиенту.")
-        funnels = list((await session.execute(select(Funnel).order_by(Funnel.name))).scalars())
     if values is None:
-        selected = request.query_params.get("funnel_id", "")
-        if selected not in {str(f.id) for f in funnels}:
-            selected = ""
         values = {
             "activity_date": date.today().isoformat(), "activity_type": "Звонок",
-            "potential_turnover": "000000", "funnel_id": selected, "result": "",
+            "potential_turnover": "000000", "result": "",
             "comment": "", "next_activity_date": "",
         }
     values = dict(values)
@@ -101,7 +97,7 @@ async def form_response(request: Request, client_id: int, user: User, values=Non
         "key": uuid4().hex, "manager": user.id, "client": client.id,
     }))
     return render(request, "contact_form.html", {
-        "current_user": user, "client": client, "funnels": funnels,
+        "current_user": user, "client": client,
         "values": values, "error": error,
         "results": CONTACT_RESULTS, "today": date.today().isoformat(),
     }, status_code)

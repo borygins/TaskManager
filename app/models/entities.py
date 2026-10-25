@@ -72,7 +72,9 @@ class Client(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     assigned_manager: Mapped[User | None] = relationship(back_populates="clients")
-    funnel_links: Mapped[list["ClientFunnel"]] = relationship(back_populates="client", cascade="all, delete-orphan")
+    funnel_links: Mapped[list["ClientFunnel"]] = relationship(
+        back_populates="client", cascade="all, delete-orphan", order_by="ClientFunnel.id",
+    )
     comments: Mapped[list["Comment"]] = relationship(
         back_populates="client",
         cascade="all, delete-orphan",
@@ -139,7 +141,7 @@ class ContactActivity(Base):
     request_key: Mapped[str] = mapped_column(String(64), unique=True)
     client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), index=True)
     manager_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    funnel_id: Mapped[int] = mapped_column(ForeignKey("funnels.id"))
+    funnel_id: Mapped[int | None] = mapped_column(ForeignKey("funnels.id"), nullable=True)
     activity_date: Mapped[date] = mapped_column(Date, index=True)
     activity_type: Mapped[str] = mapped_column(String(32))
     # Kept for existing databases; derived from result on write, not used for counting.

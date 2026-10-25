@@ -16,13 +16,15 @@ import time
 from uuid import uuid4
 
 
-VERSION = "20261025_unified_comments"
+VERSION = "20261025_unified_comments_auto_funnel"
 OLD_COMMENT_COLUMNS = {"id", "client_id", "author_id", "body", "created_at"}
 OLD_CONTACT_COLUMNS = {
     "id", "request_key", "client_id", "manager_id", "funnel_id", "activity_date",
     "activity_type", "dialogue", "result", "potential_turnover", "next_activity_date",
     "comment", "tax_number", "company_name", "funnel_name", "created_at",
 }
+UNIFIED_COMMENT_COLUMNS = OLD_COMMENT_COLUMNS | {"source"}
+UNIFIED_CONTACT_COLUMNS = (OLD_CONTACT_COLUMNS - {"comment"}) | {"comment_id"}
 
 
 def columns(connection: sqlite3.Connection, table: str) -> dict:
@@ -83,7 +85,8 @@ def migrate(database: Path, backup_dir: Path | None = None) -> dict:
     if sqlite3.sqlite_version_info < (3, 35, 0):
         raise ValueError("SQLite 3.35+ is required to remove the old notes column.")
     result = {"already_current": False, "backup": None, "linked": 0,
-              "created_for_contacts": 0, "ambiguous": 0, "notes_added": 0, "notes_already_present": 0}
+              "created_for_contacts": 0, "ambiguous": 0, "notes_added": 0,
+              "notes_already_present": 0, "contact_schema_upgraded": False}
     with closing(sqlite3.connect(path.as_uri() + "?mode=rw", uri=True, isolation_level=None, timeout=5)) as db:
         db.row_factory = sqlite3.Row
         # Required for SQLite's transactional table-rebuild procedure. Must be set
@@ -97,13 +100,64 @@ def migrate(database: Path, backup_dir: Path | None = None) -> dict:
             if not clients or not comments or not columns(db, "users"):
                 raise ValueError("Not a supported TaskManager database (clients/comments/users required).")
             check_integrity(db)
-            current = ("manager_notes" not in clients and "source" in comments
+            unified = ("manager_notes" not in clients and set(comments) == UNIFIED_COMMENT_COLUMNS
                        and not comments["author_id"][3]
-                       and (not contacts or ("comment_id" in contacts and "comment" not in contacts)))
+                       and (not contacts or set(contacts) == UNIFIED_CONTACT_COLUMNS))
+            current = unified and (not contacts or not contacts["funnel_id"][3])
             if current:
                 verify_links(db)
                 db.rollback()
                 result["already_current"] = True
+                return result
+            # Databases migrated by the first version of this script only need
+            # funnel_id changed from NOT NULL to nullable. This preserves every
+            # row and makes the new “Прочее” fallback possible.
+            if unified and contacts and contacts["funnel_id"][3]:
+                if db.execute("""SELECT 1 FROM sqlite_master WHERE
+                    (type='trigger' AND tbl_name='contact_activities') OR type='view' LIMIT 1""").fetchone():
+                    raise ValueError("Custom triggers/views found. Review them before this migration.")
+                if columns(db, "contact_activities__unified"):
+                    raise ValueError("Unexpected staging table: contact_activities__unified.")
+                backup_root = backup_dir.resolve() if backup_dir else path.parent / "backups"
+                backup_root.mkdir(parents=True, exist_ok=True)
+                backup = backup_root / f"{path.stem}_before_comments_{datetime.now():%Y%m%d_%H%M%S}_{uuid4().hex[:8]}.sqlite3"
+                create_backup(path, backup)
+                result["backup"] = str(backup)
+                print(f"Backup saved: {backup}", flush=True)
+                old_contacts = list(db.execute("SELECT * FROM contact_activities ORDER BY id"))
+                indexes = [row[0] for row in db.execute("""SELECT sql FROM sqlite_master
+                    WHERE type='index' AND tbl_name='contact_activities' AND sql IS NOT NULL""")]
+                db.execute("""CREATE TABLE contact_activities__unified (
+                    id INTEGER NOT NULL PRIMARY KEY, request_key VARCHAR(64) NOT NULL UNIQUE,
+                    client_id INTEGER NOT NULL REFERENCES clients(id),
+                    manager_id INTEGER NOT NULL REFERENCES users(id),
+                    funnel_id INTEGER REFERENCES funnels(id), activity_date DATE NOT NULL,
+                    activity_type VARCHAR(32) NOT NULL, dialogue BOOLEAN NOT NULL,
+                    result VARCHAR(64) NOT NULL, potential_turnover NUMERIC(14,2) NOT NULL,
+                    next_activity_date DATE, comment_id INTEGER NOT NULL UNIQUE REFERENCES comments(id),
+                    tax_number VARCHAR(64) NOT NULL, company_name VARCHAR(255) NOT NULL,
+                    funnel_name VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL
+                )""")
+                fields = list(contacts)
+                field_sql = ",".join('"' + field + '"' for field in fields)
+                placeholders = ",".join("?" for _ in fields)
+                db.executemany(f"INSERT INTO contact_activities__unified ({field_sql}) VALUES ({placeholders})",
+                               [tuple(row[field] for field in fields) for row in old_contacts])
+                for row in old_contacts:
+                    saved = db.execute("SELECT * FROM contact_activities__unified WHERE id=?", (row["id"],)).fetchone()
+                    if any(saved[field] != row[field] for field in fields):
+                        raise ValueError(f"Contact #{row['id']} did not round-trip correctly.")
+                db.execute("DROP TABLE contact_activities")
+                db.execute("ALTER TABLE contact_activities__unified RENAME TO contact_activities")
+                for sql in indexes:
+                    db.execute(sql)
+                verify_links(db)
+                check_integrity(db)
+                db.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)")
+                db.execute("INSERT OR IGNORE INTO schema_migrations VALUES (?,?)",
+                           (VERSION, datetime.now(timezone.utc).isoformat()))
+                db.commit()
+                result["contact_schema_upgraded"] = True
                 return result
             if set(comments) != OLD_COMMENT_COLUMNS or (contacts and set(contacts) != OLD_CONTACT_COLUMNS):
                 raise ValueError("Unknown or partially migrated schema. No changes made; inspect it manually.")
@@ -206,7 +260,7 @@ def migrate(database: Path, backup_dir: Path | None = None) -> dict:
                     id INTEGER NOT NULL PRIMARY KEY, request_key VARCHAR(64) NOT NULL UNIQUE,
                     client_id INTEGER NOT NULL REFERENCES clients(id),
                     manager_id INTEGER NOT NULL REFERENCES users(id),
-                    funnel_id INTEGER NOT NULL REFERENCES funnels(id), activity_date DATE NOT NULL,
+                    funnel_id INTEGER REFERENCES funnels(id), activity_date DATE NOT NULL,
                     activity_type VARCHAR(32) NOT NULL, dialogue BOOLEAN NOT NULL,
                     result VARCHAR(64) NOT NULL, potential_turnover NUMERIC(14,2) NOT NULL,
                     next_activity_date DATE, comment_id INTEGER NOT NULL UNIQUE REFERENCES comments(id),
@@ -263,6 +317,8 @@ def main() -> int:
     if result["already_current"]:
         print("Already migrated. No changes made.")
     else:
+        if result["contact_schema_upgraded"]:
+            print("Contact funnel field upgraded for automatic 'Прочее' values.")
         print(f"Contacts linked: {result['linked']}")
         print(f"Comments created for contacts: {result['created_for_contacts']}")
         print(f"Ambiguous contacts (old comments preserved): {result['ambiguous']}")

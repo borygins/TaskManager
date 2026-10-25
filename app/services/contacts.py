@@ -9,7 +9,7 @@ from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.models import Client, Comment, ContactActivity, ContactReportState, Funnel, User
+from app.models import Client, ClientFunnel, Comment, ContactActivity, ContactReportState, Funnel, User
 from app.services.task_service import append_daily_activity
 
 
@@ -32,7 +32,6 @@ class ContactInput:
     potential_turnover: Decimal
     next_activity_date: date | None
     comment: str
-    funnel_id: int
 
 
 def parse_contact(form: dict[str, str]) -> ContactInput:
@@ -40,9 +39,8 @@ def parse_contact(form: dict[str, str]) -> ContactInput:
         day = date.fromisoformat(form.get("activity_date", ""))
         next_raw = form.get("next_activity_date", "").strip()
         next_day = date.fromisoformat(next_raw) if next_raw else None
-        funnel_id = int(form.get("funnel_id", ""))
     except (ValueError, TypeError) as exc:
-        raise ValueError("Укажите корректную дату активности, следующую дату и воронку.") from exc
+        raise ValueError("Укажите корректную дату активности и следующую дату.") from exc
     if day > date.today():
         raise ValueError("Нельзя записывать выполненный контакт будущей датой.")
     if next_day and next_day < day:
@@ -68,7 +66,7 @@ def parse_contact(form: dict[str, str]) -> ContactInput:
             raise ValueError
     except (InvalidOperation, ValueError) as exc:
         raise ValueError("Потенциал оборота: число от 0 до 999999999999,99, не более двух знаков после запятой.") from exc
-    return ContactInput(day, kind, result, amount, next_day, comment, funnel_id)
+    return ContactInput(day, kind, result, amount, next_day, comment)
 
 
 async def record_contact(
@@ -85,20 +83,25 @@ async def record_contact(
         if existing.manager_id != actor.id or existing.client_id != client.id:
             raise PermissionError("Повторная отправка не соответствует клиенту или пользователю.")
         return existing
-    funnel = await session.get(Funnel, data.funnel_id)
-    if not funnel:
-        raise ValueError("Выбранная воронка больше не существует.")
+    # The earliest client-funnel link is the primary channel for the journal.
+    # A client without funnels is reported as “Прочее” without creating a
+    # synthetic funnel or silently changing the client's assignments.
+    funnel = (await session.execute(
+        select(Funnel).join(ClientFunnel, ClientFunnel.funnel_id == Funnel.id).where(
+            ClientFunnel.client_id == client.id,
+        ).order_by(ClientFunnel.id).limit(1)
+    )).scalar_one_or_none()
     latest_day = (await session.execute(
         select(func.max(ContactActivity.activity_date)).where(ContactActivity.client_id == client.id)
     )).scalar_one()
     contact = ContactActivity(
         request_key=request_key, client_id=client.id, manager_id=actor.id,
-        funnel_id=funnel.id, activity_date=data.activity_date, activity_type=data.activity_type,
+        funnel_id=funnel.id if funnel else None, activity_date=data.activity_date, activity_type=data.activity_type,
         dialogue=data.result != "Недозвон", result=data.result, potential_turnover=data.potential_turnover,
         next_activity_date=data.next_activity_date,
         comment_record=Comment(client_id=client.id, author_id=actor.id, body=data.comment, source="contact"),
         tax_number=client.tax_number, company_name=client.company_name or client.full_name,
-        funnel_name=funnel.name,
+        funnel_name=funnel.name if funnel else "Прочее",
     )
     session.add(contact)
     await session.flush()

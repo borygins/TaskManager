@@ -171,6 +171,34 @@ class CommentsMigrationTests(unittest.TestCase):
         finally:
             engine.dispose()
 
+    def test_first_migration_version_is_upgraded_for_other_channel(self):
+        migrate(self.path)
+        with closing(sqlite3.connect(self.path)) as db:
+            db.execute("PRAGMA foreign_keys=OFF")
+            db.executescript("""
+                ALTER TABLE contact_activities RENAME TO contact_activities_nullable;
+                CREATE TABLE contact_activities (
+                    id INTEGER NOT NULL PRIMARY KEY, request_key VARCHAR(64) NOT NULL UNIQUE,
+                    client_id INTEGER NOT NULL REFERENCES clients(id),
+                    manager_id INTEGER NOT NULL REFERENCES users(id),
+                    funnel_id INTEGER NOT NULL REFERENCES funnels(id), activity_date DATE NOT NULL,
+                    activity_type VARCHAR(32) NOT NULL, dialogue BOOLEAN NOT NULL,
+                    result VARCHAR(64) NOT NULL, potential_turnover NUMERIC(14,2) NOT NULL,
+                    next_activity_date DATE, comment_id INTEGER NOT NULL UNIQUE REFERENCES comments(id),
+                    tax_number VARCHAR(64) NOT NULL, company_name VARCHAR(255) NOT NULL,
+                    funnel_name VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL
+                );
+                INSERT INTO contact_activities SELECT * FROM contact_activities_nullable;
+                DROP TABLE contact_activities_nullable;
+            """)
+            db.commit()
+        result = migrate(self.path)
+        self.assertTrue(result["contact_schema_upgraded"])
+        with closing(sqlite3.connect(self.path)) as db:
+            self.assertFalse(columns(db, "contact_activities")["funnel_id"][3])
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM contact_activities").fetchone()[0], 2)
+            self.assertEqual(list(db.execute("PRAGMA foreign_key_check")), [])
+
 
 if __name__ == "__main__":
     unittest.main()

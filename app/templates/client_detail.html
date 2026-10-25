@@ -29,7 +29,7 @@
             </div>
         </div>
         {% if current_user.role == 'manager' %}
-        <a class="secondary-link" href="/clients/{{ client.id }}/contacts/new{% if funnel_id %}?funnel_id={{ funnel_id }}{% endif %}">Активность</a>
+        <a class="secondary-link" href="/clients/{{ client.id }}/contacts/new">Активность</a>
         {% endif %}
     </div>
     {% if funnel_id %}

@@ -48,11 +48,13 @@ async def init_db() -> None:
         # model on an old database or run the destructive migration at startup.
         old_clients = {row[1] for row in (await connection.execute(text("PRAGMA table_info(clients)"))).fetchall()}
         old_comments = (await connection.execute(text("PRAGMA table_info(comments)"))).fetchall()
-        old_contacts = {row[1] for row in (await connection.execute(text("PRAGMA table_info(contact_activities)"))).fetchall()}
+        contact_rows = (await connection.execute(text("PRAGMA table_info(contact_activities)"))).fetchall()
+        old_contacts = {row[1] for row in contact_rows}
         if ("manager_notes" in old_clients
                 or (old_comments and ("source" not in {row[1] for row in old_comments}
                                       or any(row[1] == "author_id" and row[3] for row in old_comments)))
-                or (old_contacts and ("comment" in old_contacts or "comment_id" not in old_contacts))):
+                or (old_contacts and ("comment" in old_contacts or "comment_id" not in old_contacts
+                                      or any(row[1] == "funnel_id" and row[3] for row in contact_rows)))):
             raise RuntimeError(
                 "Требуется миграция комментариев. Остановите приложение и выполните "
                 "python scripts/migrate_comments.py --database task_manager.sqlite3 "

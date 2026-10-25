@@ -99,16 +99,19 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
     async def new_form(self, client_id=None, **changes):
         client_id = client_id or self.client.id
+        expected_client = next(client for client in (self.client, self.second_client, self.other_client)
+                               if client.id == client_id)
         status, _, body = await self.request("GET", f"/clients/{client_id}/contacts/new")
         self.assertEqual(status, 200)
         text = body.decode()
         self.assertNotIn('name="dialogue"', text)
-        self.assertIn(f'<h1>{self.client.company_name} • ИНН {self.client.tax_number}</h1>', text)
-        self.assertIn(f'<p class="muted">Директор: {self.client.full_name}</p>', text)
+        self.assertNotIn('name="funnel_id"', text)
+        self.assertIn(f'<h1>{expected_client.company_name} • ИНН {expected_client.tax_number}</h1>', text)
+        self.assertIn(f'<p class="muted">Директор: {expected_client.full_name}</p>', text)
         self.assertIn(f'<span class="tag">{self.manager.full_name}</span>', text)
         fields = {
             "activity_date": self.today.isoformat(), "activity_type": "Звонок",
-            "result": "Переговоры", "potential_turnover": "000000", "funnel_id": str(self.funnel.id),
+            "result": "Переговоры", "potential_turnover": "000000",
             "next_activity_date": "", "comment": "Обсудили условия",
         }
         for name in ("csrf_token", "submission_token"):
@@ -580,10 +583,17 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_full_day_merge_meeting_priority_and_daily_file(self):
         tomorrow = (self.today + timedelta(days=1)).isoformat()
+        async with self.factory() as session:
+            # The first assigned funnel remains the automatic journal channel.
+            session.add_all([
+                ClientFunnel(client_id=self.client.id, funnel_id=self.funnel.id),
+                ClientFunnel(client_id=self.client.id, funnel_id=self.second_funnel.id),
+            ])
+            await session.commit()
         await self.save(result="Недозвон", next_activity_date=tomorrow, comment="Не ответил")
         self.assertFalse((await self.report_rows())[0].qualified)
         await self.save(result="Перенос на дату", next_activity_date=tomorrow, comment="Обсудили условия", potential_turnover="300000")
-        await self.save(activity_type="Встреча", result="Договор подписан", comment="Подписали договор", potential_turnover="500000", funnel_id=str(self.second_funnel.id))
+        await self.save(activity_type="Встреча", result="Договор подписан", comment="Подписали договор", potential_turnover="500000")
         await self.save(result="Недозвон", next_activity_date=tomorrow, comment="Не ответил повторно", potential_turnover="450000")
         rows = await self.report_rows()
         self.assertEqual(len(rows), 1)
@@ -617,6 +627,15 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(client.status, "Подписан")
             self.assertEqual(client.next_call_date, self.today + timedelta(days=1))
 
+    async def test_contact_without_funnel_uses_other_channel(self):
+        await self.save()
+        row = (await self.report_rows())[0]
+        self.assertEqual(row.channel, "Прочее")
+        async with self.factory() as session:
+            contact = (await list_contacts(session, self.manager.id, self.today, self.today))[0]
+            self.assertIsNone(contact.funnel_id)
+            self.assertEqual(contact.funnel_name, "Прочее")
+
     async def test_unique_clients_and_monthly_grouping(self):
         await self.save()
         await self.save(comment="Повторный разговор")
@@ -637,6 +656,9 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status, 200)
 
     async def test_idempotency_and_history_survives_reassignment(self):
+        async with self.factory() as session:
+            session.add(ClientFunnel(client_id=self.client.id, funnel_id=self.funnel.id))
+            await session.commit()
         fields = await self.new_form()
         for _ in range(2):
             status, _, _ = await self.request("POST", f"/clients/{self.client.id}/contacts", fields)
@@ -722,7 +744,6 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
             {"result": "Перенос на дату"},
             {"comment": "  "}, {"potential_turnover": "NaN"}, {"potential_turnover": "-1"},
             {"potential_turnover": "0.001"}, {"potential_turnover": "1000000000000"},
-            {"funnel_id": "999999"},
             {"activity_type": "Встреча", "result": "Недозвон"},
             {"activity_date": (self.today + timedelta(days=1)).isoformat()},
             {"next_activity_date": (self.today - timedelta(days=1)).isoformat()},
