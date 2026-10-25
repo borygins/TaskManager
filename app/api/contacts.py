@@ -18,7 +18,12 @@ from app.core.config import settings
 from app.core.sales import ACTIVITY_MARKS, CLIENT_STATUSES, FINAL_CLIENT_STATUSES
 from app.db.session import SessionLocal
 from app.models import Client, ContactActivity, ContactReportState, User
-from app.services.contact_reports import REPORT_HEADERS, build_contact_workbook, generate_daily_report
+from app.services.contact_reports import (
+    REPORT_HEADERS,
+    build_contact_workbook,
+    contact_report_content_disposition,
+    generate_daily_report,
+)
 from app.services.contacts import aggregate_contacts, list_contacts, parse_contact, record_contact
 from app.services.task_service import get_client_with_details
 
@@ -215,9 +220,10 @@ async def export_contacts(day: str | None = None, month: str | None = None, mana
         return JSONResponse({"count": len(rows)}, headers={"Cache-Control": "no-store"})
     period = start.strftime("%m.%Y" if month else "%d.%m.%Y")
     content = await asyncio.to_thread(build_contact_workbook, rows, manager.full_name, period)
-    suffix = start.strftime("%Y-%m" if month else "%Y-%m-%d")
     return Response(content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={
-        "Content-Disposition": f'attachment; filename="contacts_{manager.id}_{suffix}.xlsx"',
+        "Content-Disposition": contact_report_content_disposition(
+            manager.employee_id, start, monthly=bool(month),
+        ),
     })
 
 

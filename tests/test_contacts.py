@@ -409,7 +409,7 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("data-client-search", text)
         self.assertIn("data-date-submit", text)
         self.assertIn("data-day-navigation", text)
-        self.assertIn(">Показать дату</button>", text)
+        self.assertIn(">Выбрать дату</button>", text)
         self.assertIn(">Найти</button>", text)
         self.assertIn(f'name="day" value="{selected.isoformat()}"', text)
 
@@ -696,6 +696,10 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row.comment, "#недозвон Не ответил = #перезвонить Обсудили условия = Подписали договор = #недозвон Не ответил повторно")
         paths = list((self.root / "reports").rglob("*.xlsx"))
         self.assertEqual(len(paths), 1)
+        self.assertEqual(
+            paths[0].name,
+            f"Журнал_активностей_{self.today.isoformat()}_{self.manager.employee_id}.xlsx",
+        )
         workbook = load_workbook(paths[0])
         self.addCleanup(workbook.close)
         sheet = workbook.active
@@ -793,8 +797,13 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         previous_month = this_month - timedelta(days=1)
         await self.save(comment="Текущий месяц")
         await self.save(activity_date=previous_month.isoformat(), comment="Предыдущий месяц")
-        status, _, body = await self.request("GET", f"/contacts/export?month={self.today:%Y-%m}")
+        status, headers, body = await self.request("GET", f"/contacts/export?month={self.today:%Y-%m}")
         self.assertEqual(status, 200)
+        self.assertIn(
+            f'filename="activity_journal_{self.today:%Y-%m}_{self.manager.employee_id}.xlsx"',
+            headers["content-disposition"],
+        )
+        self.assertIn("filename*=UTF-8''", headers["content-disposition"])
         workbook = load_workbook(BytesIO(body))
         self.assertEqual(workbook.active.max_row, 4)
         self.assertEqual(workbook.active["I4"].value, "Текущий месяц")

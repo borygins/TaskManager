@@ -7,6 +7,7 @@ from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from urllib.parse import quote
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -92,13 +93,34 @@ def build_contact_workbook(rows: list[ContactRow], manager_name: str, period: st
     return buffer.getvalue()
 
 
-def daily_report_path(manager_id: int, day: date) -> Path:
-    return settings.reports_dir / day.strftime("%Y-%m") / f"contacts_{manager_id}_{day.isoformat()}.xlsx"
+def _safe_employee_id(employee_id: str) -> str:
+    value = "".join(
+        character
+        for character in employee_id
+        if character.isascii() and (character.isalnum() or character in "-_")
+    )
+    return value or "manager"
 
 
-def write_daily_report(rows: list[ContactRow], manager_name: str, manager_id: int, day: date) -> Path:
+def contact_report_filename(employee_id: str, period_start: date, monthly: bool = False) -> str:
+    period = period_start.strftime("%Y-%m" if monthly else "%Y-%m-%d")
+    return f"Журнал_активностей_{period}_{_safe_employee_id(employee_id)}.xlsx"
+
+
+def contact_report_content_disposition(employee_id: str, period_start: date, monthly: bool = False) -> str:
+    filename = contact_report_filename(employee_id, period_start, monthly)
+    period = period_start.strftime("%Y-%m" if monthly else "%Y-%m-%d")
+    fallback = f"activity_journal_{period}_{_safe_employee_id(employee_id)}.xlsx"
+    return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{quote(filename, safe="")}'
+
+
+def daily_report_path(employee_id: str, day: date) -> Path:
+    return settings.reports_dir / day.strftime("%Y-%m") / contact_report_filename(employee_id, day)
+
+
+def write_daily_report(rows: list[ContactRow], manager_name: str, employee_id: str, day: date) -> Path:
     content = build_contact_workbook(rows, manager_name, day.strftime("%d.%m.%Y"))
-    destination = daily_report_path(manager_id, day)
+    destination = daily_report_path(employee_id, day)
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = None
     try:
@@ -122,8 +144,9 @@ async def generate_daily_report(manager_id: int, day: date) -> bool:
             manager = await session.get(User, manager_id)
             rows = aggregate_contacts(await list_contacts(session, manager_id, day, day))
             manager_name = manager.full_name
+            employee_id = manager.employee_id
         try:
-            await asyncio.to_thread(write_daily_report, rows, manager_name, manager_id, day)
+            await asyncio.to_thread(write_daily_report, rows, manager_name, employee_id, day)
         except Exception:
             logger.exception("Cannot generate contact report for manager %s, day %s", manager_id, day)
             async with SessionLocal() as session:
