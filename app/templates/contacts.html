@@ -27,14 +27,12 @@
     <p class="muted">Уникальные клиенты без отметки #недозвон. Повторные звонки и встречи с тем же клиентом не увеличивают норму.</p>
     <div class="actions contact-actions">
         <a class="secondary-link" href="/clients/new">Добавить клиента</a>
-        <a class="secondary-link" href="/contacts/export?day={{ day.isoformat() }}&manager_id={{ current_user.id }}" data-export-confirm>Скачать Excel за день</a>
-        <a class="secondary-link" href="/contacts/journal?month={{ day.strftime('%Y-%m') }}">Журнал за месяц</a>
     </div>
 </section>
 {% if request.query_params.get('saved') %}<div class="hint" role="status">Контакт сохранён в базе.</div>{% endif %}
 {% if report_state and report_state.pending %}
 <section class="panel">
-    <div class="error-box" role="alert">{{ report_state.last_error or 'Excel ожидает обновления.' }} Контакты сохранены. Повторная попытка выполняется автоматически; также можно скачать свежий отчёт кнопкой выше.</div>
+    <div class="error-box" role="alert">{{ report_state.last_error or 'Excel ожидает обновления.' }} Контакты сохранены. Повторная попытка выполняется автоматически; также можно скачать свежий отчёт в разделе «Отчёты».</div>
     <form method="post" action="/contacts/report/retry">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="day" value="{{ day.isoformat() }}">
         <button type="submit">Повторить сохранение файла</button>

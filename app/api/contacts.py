@@ -85,6 +85,14 @@ async def report_manager(session, user: User, manager_id: int | None) -> User:
     return manager
 
 
+async def report_managers(session) -> list[User]:
+    """Managers available for current and historical contact reports."""
+    has_history = select(ContactActivity.id).where(ContactActivity.manager_id == User.id).exists()
+    return list((await session.execute(
+        select(User).where(or_(User.role == "manager", has_history)).order_by(User.full_name)
+    )).scalars())
+
+
 async def form_response(request: Request, client_id: int, user: User, values=None, error=None, status_code=200):
     async with SessionLocal() as session:
         client = await get_client_with_details(client_id, session)
@@ -185,16 +193,22 @@ async def contacts_page(request: Request, day: str | None = None, q: str = "", u
     })
 
 
+@router.get("/reports", response_class=HTMLResponse)
+async def reports_page(request: Request, user: User = Depends(get_current_user)):
+    async with SessionLocal() as session:
+        managers = await report_managers(session) if user.role == "boss" else []
+    return render(request, "reports.html", {
+        "current_user": user, "today": date.today(), "managers": managers,
+    })
+
+
 @router.get("/contacts/journal", response_class=HTMLResponse)
 async def contact_journal(request: Request, month: str | None = None, manager_id: int | None = None,
                           user: User = Depends(get_current_user)):
     start, end = month_bounds(month)
     async with SessionLocal() as session:
         # Include former managers so their historical reports remain accessible.
-        has_history = select(ContactActivity.id).where(ContactActivity.manager_id == User.id).exists()
-        managers = list((await session.execute(
-            select(User).where(or_(User.role == "manager", has_history)).order_by(User.full_name)
-        )).scalars()) if user.role == "boss" else []
+        managers = await report_managers(session) if user.role == "boss" else []
         manager = None
         rows = []
         if user.role != "boss" or manager_id is not None:

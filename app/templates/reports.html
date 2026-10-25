@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+    <div class="badge">Отчётность</div>
+    <h1>Отчёты</h1>
+    <p class="muted">Журналы контактов и общая выгрузка клиентов собраны в одном разделе.</p>
+</section>
+
+<div class="funnel-grid">
+    <section class="funnel-card">
+        <h2>Журнал за месяц</h2>
+        <p class="muted">Просмотр журнала и выгрузка Excel за выбранный месяц. Руководитель выбирает менеджера на странице журнала.</p>
+        <div class="actions contact-actions">
+            <a class="secondary-link" href="/contacts/journal">Открыть журнал</a>
+        </div>
+    </section>
+
+    <section class="funnel-card">
+        <h2>Дневная выгрузка</h2>
+        <p class="muted">Excel с активностями клиентов за выбранный день.</p>
+        <form method="get" action="/contacts/export" class="stack-form" data-export-form>
+            <label>
+                <span>Дата отчёта</span>
+                <input type="date" name="day" value="{{ today.isoformat() }}" required>
+            </label>
+            {% if current_user.role == 'boss' %}
+            <label>
+                <span>Менеджер</span>
+                <select name="manager_id" required>
+                    <option value="">Выберите менеджера</option>
+                    {% for manager in managers %}
+                    <option value="{{ manager.id }}">{{ manager.full_name }} ({{ manager.employee_id }})</option>
+                    {% endfor %}
+                </select>
+            </label>
+            {% endif %}
+            <div class="actions contact-actions">
+                <button type="submit">Скачать Excel за день</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="funnel-card">
+        <h2>Общая выгрузка клиентов</h2>
+        <p class="muted">Карточки клиентов со всеми доступными вам данными. Менеджер выгружает своих клиентов, руководитель — всю базу.</p>
+        <div class="actions contact-actions">
+            <a class="secondary-link" href="/export" data-export-confirm>Выгрузить клиентов</a>
+        </div>
+    </section>
+</div>
+{% endblock %}

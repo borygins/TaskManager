@@ -274,14 +274,44 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
     async def test_navigation_hides_personal_contacts_for_boss(self):
         for user in (self.manager, self.boss):
             self.active_user = user
-            status, _, body = await self.request("GET", "/contacts/journal")
+            status, _, body = await self.request("GET", "/reports")
             self.assertEqual(status, 200)
             navigation = re.search(r'<nav class="nav">(.*?)</nav>', body.decode(), re.S).group(1)
             if user.role == "boss":
                 self.assertNotIn('href="/contacts"', navigation)
             else:
                 self.assertIn('href="/contacts">Мои звонки и встречи</a>', navigation)
-            self.assertIn('href="/contacts/journal"', navigation)
+            self.assertIn('href="/reports">Отчёты</a>', navigation)
+            self.assertNotIn('href="/contacts/journal"', navigation)
+            self.assertNotIn('href="/export"', navigation)
+
+    async def test_reports_page_collects_all_exports_and_daily_manager_selection(self):
+        for user in (self.manager, self.boss):
+            self.active_user = user
+            status, _, body = await self.request("GET", "/reports")
+            self.assertEqual(status, 200)
+            text = body.decode()
+            self.assertIn("Журнал за месяц", text)
+            self.assertIn('href="/contacts/journal"', text)
+            self.assertIn("Дневная выгрузка", text)
+            self.assertIn('action="/contacts/export"', text)
+            self.assertIn('name="day"', text)
+            self.assertIn("Общая выгрузка клиентов", text)
+            self.assertIn('href="/export" data-export-confirm', text)
+            self.assertIn("data-export-form", text)
+            if user.role == "boss":
+                self.assertIn('name="manager_id"', text)
+                self.assertIn(f'value="{self.manager.id}"', text)
+                self.assertIn(f'value="{self.other.id}"', text)
+            else:
+                self.assertNotIn('name="manager_id"', text)
+
+        self.active_user = self.manager
+        status, _, body = await self.request("GET", "/contacts")
+        self.assertEqual(status, 200)
+        hero = re.search(r'<section class="hero compact">(.*?)</section>', body.decode(), re.S).group(1)
+        self.assertNotIn("Скачать Excel за день", hero)
+        self.assertNotIn("Журнал за месяц", hero)
 
     async def test_boss_has_no_personal_contact_controls_or_routes(self):
         fields = await self.new_form()
@@ -347,8 +377,8 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
                     self.assertNotIn("content-disposition", headers)
                     self.assertIn(f"Выгрузить {expected} записей клиентов?", body.decode())
                     self.assertIn('href="/export?confirmed=true"', body.decode())
-                    self.assertIn('href="/dashboard">Отмена</a>', body.decode())
-                    self.assertIn("app.js?v=activity-form-3", body.decode())
+                    self.assertIn('href="/reports">Отмена</a>', body.decode())
+                    self.assertIn("app.js?v=reports-hub-4", body.decode())
                 build.assert_not_called()
             self.active_user = self.manager
             status, headers, body = await self.request("GET", "/export?confirmed=true")
