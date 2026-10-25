@@ -29,7 +29,7 @@
 </section>
 <section class="panel">
     <h2>Новая активность</h2>
-    <p class="muted">Запишите звонок или встречу и при необходимости измените статус клиента. Воронка и потенциал оборота берутся из карточки автоматически. Обычное изменение карточки не считается контактом.</p>
+    <p class="muted">Запишите звонок или встречу и при необходимости измените статус клиента. Воронка и потенциал оборота в месяц берутся из карточки автоматически. Обычное изменение карточки не считается контактом.</p>
     {% if error %}<div class="error-box" role="alert">{{ error }}</div>{% endif %}
     <form method="post" action="/clients/{{ client.id }}/contacts" class="stack-form" data-contact-form>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

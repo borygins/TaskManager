@@ -16,20 +16,21 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.sales import CLIENT_STATUSES, CLIENT_STATUS_SET
+from app.core.sales import CLIENT_STATUSES, CLIENT_STATUS_SET, POTENTIAL_TURNOVER_LABEL
 from app.core.security import normalize_employee_id
 from app.models import Client, ClientFunnel, Comment, Funnel, User
 from app.services.task_service import append_daily_activity
 
 MAX_FILE_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 5000
-IMPORT_POLICY_VERSION = 5
+IMPORT_POLICY_VERSION = 6
 FIELDS = {
     "ФИО": "full_name", "Организация": "company_name", "Телефон": "phone",
     "Дата звонка": "last_call_date", "Следующая дата звонка": "next_call_date",
-    "Статус": "status", "Оборот в месяц": "monthly_turnover", "MCC": "mcc_code",
+    "Статус": "status", POTENTIAL_TURNOVER_LABEL: "monthly_turnover", "MCC": "mcc_code",
     "Банк-конкурент": "competitor_bank", "Адрес регистрации": "registration_address",
 }
+HEADER_ALIASES = {"Оборот в месяц": POTENTIAL_TURNOVER_LABEL}
 DATES = {"last_call_date", "next_call_date"}
 PROTECTED = DATES | {"status", "phone", "full_name", "company_name"}
 LABELS = {value: key for key, value in FIELDS.items()} | {
@@ -97,8 +98,9 @@ def parse_workbook(content: bytes) -> dict:
         iterator = sheet.iter_rows()
         header_cells = next(iterator, ())
         headers = [scalar_text(cell.value) for cell in header_cells]
-        nonempty = [name for name in headers if name]
-        if "ИНН" not in headers or len(nonempty) != len(set(nonempty)):
+        canonical_headers = [HEADER_ALIASES.get(name, name) for name in headers]
+        nonempty = [name for name in canonical_headers if name]
+        if "ИНН" not in canonical_headers or len(nonempty) != len(set(nonempty)):
             raise ValueError("Нужна колонка «ИНН»; названия колонок не должны повторяться.")
         rows = []
         for number, cells in enumerate(iterator, start=2):
@@ -107,7 +109,7 @@ def parse_workbook(content: bytes) -> dict:
             raw = [date_text(cell.value) if isinstance(cell.value, (date, datetime)) else scalar_text(cell.value) for cell in cells]
             if not any(raw):
                 continue
-            values = {name: cells[index].value for index, name in enumerate(headers) if name}
+            values = {name: cells[index].value for index, name in enumerate(canonical_headers) if name}
             row = {"row": number, "raw": raw, "inn": scalar_text(values.get("ИНН")), "values": {}, "error": ""}
             try:
                 if any(cell.data_type in {"f", "e"} for cell in cells):
@@ -128,9 +130,9 @@ def parse_workbook(content: bytes) -> dict:
                         try:
                             amount = Decimal(raw_value.replace(" ", "").replace("\u00a0", "").replace(",", "."))
                         except InvalidOperation as exc:
-                            raise ValueError("Оборот в месяц: некорректное число.") from exc
+                            raise ValueError(f"{POTENTIAL_TURNOVER_LABEL}: некорректное число.") from exc
                         if not amount.is_finite() or not 0 <= amount <= Decimal("999999999999.99") or amount != amount.quantize(Decimal("0.01")):
-                            raise ValueError("Оборот: неотрицательное число до 999999999999.99, не более двух знаков после запятой.")
+                            raise ValueError(f"{POTENTIAL_TURNOVER_LABEL}: неотрицательное число до 999999999999.99, не более двух знаков после запятой.")
                         raw_value = format(amount, ".2f")
                     elif len(raw_value) > LIMITS.get(field, 10000):
                         raise ValueError(f"{column}: слишком длинное значение.")
@@ -167,7 +169,7 @@ def parse_workbook(content: bytes) -> dict:
             else:
                 for row in group[1:]:
                     row["duplicate"] = group[0]["row"]
-        return {"headers": headers, "rows": rows}
+        return {"headers": canonical_headers, "rows": rows}
     except ValueError:
         raise
     except Exception as exc:

@@ -158,6 +158,8 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(text.count(title), 1)
                 self.assertIn(f'<p class="muted">Директор: {self.client.full_name}</p>', text)
                 self.assertNotIn('name="status"', text)
+                self.assertIn("Потенциал оборота в месяц", text)
+                self.assertNotIn("Обороты в месяц", text)
                 self.assertEqual(text.count(f"Директор: {self.client.full_name}"), 1)
                 self.assertIn('aria-label="Воронки клиента"', text)
                 self.assertIn(f'<span class="tag accent">{self.funnel.name}</span>', text)
@@ -346,7 +348,7 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIn(f"Выгрузить {expected} записей клиентов?", body.decode())
                     self.assertIn('href="/export?confirmed=true"', body.decode())
                     self.assertIn('href="/dashboard">Отмена</a>', body.decode())
-                    self.assertIn("app.js?v=export-confirm-2", body.decode())
+                    self.assertIn("app.js?v=activity-form-3", body.decode())
                 build.assert_not_called()
             self.active_user = self.manager
             status, headers, body = await self.request("GET", "/export?confirmed=true")

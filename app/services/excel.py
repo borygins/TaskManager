@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.sales import POTENTIAL_TURNOVER_LABEL
 from app.models import Client, ClientFunnel
 from app.services.task_service import client_to_export_row
 
@@ -21,7 +22,7 @@ EXPORT_HEADERS = [
     "Следующая дата звонка",
     "Дата последней активности менеджера",
     "Статус",
-    "Оборот в месяц",
+    POTENTIAL_TURNOVER_LABEL,
     "MCC",
     "Банк-конкурент",
     "Адрес регистрации",

@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 
 import test_contacts
 from app.api.deps import get_current_user
+from app.core.sales import POTENTIAL_TURNOVER_LABEL
 from app.main import app
 from app.models import Client, ClientFunnel, Comment, ContactActivity, Funnel, User
 from app.models.entities import ClientImport
@@ -100,7 +101,7 @@ class ImportTests(unittest.IsolatedAsyncioTestCase):
              "Табельный номер": self.other.employee_id, "ФИО менеджера": "Игнорируем",
              "Воронки": "Спарк, Новая", "Комментарий менеджера": "Новая заметка"},
             {"ИНН": "001111111111", "Организация": "Новый клиент", "Телефон": "12345",
-             "Оборот в месяц": "123,45", "Комментарий менеджера": "Первое примечание"},
+             POTENTIAL_TURNOVER_LABEL: "123,45", "Комментарий менеджера": "Первое примечание"},
             {"ИНН": "bad", "Организация": "Ошибка"},
         ]
         batch_id, plan = await self.preview(rows)
@@ -222,7 +223,7 @@ class ImportTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_values_are_row_errors(self):
         for changes in ({"Табельный номер": "99999999"}, {"Табельный номер": self.boss.employee_id},
-                        {"Оборот в месяц": "NaN"}, {"Дата звонка": "31.02.2026"},
+                        {POTENTIAL_TURNOVER_LABEL: "NaN"}, {"Дата звонка": "31.02.2026"},
                         {"Статус": "Неизвестный"}, {"Организация": "=1+1"}):
             _, plan = await self.preview([{"ИНН": self.client.tax_number, **changes}])
             self.assertEqual(plan["counts"]["error"], 1, changes)
@@ -240,7 +241,7 @@ class ImportTests(unittest.IsolatedAsyncioTestCase):
             "ИНН": self.client.tax_number, "ФИО": "Другое ФИО", "Организация": "Другая организация",
             "Телефон": "22222", "Статус": "Поиск контакта", "Дата звонка": "2026-01-01",
             "Следующая дата звонка": "2026-01-02", "Дата последней активности менеджера": "НЕ ДАТА — ИГНОРИРУЕТСЯ",
-            "Оборот в месяц": "123.45", "MCC": "5411", "Банк-конкурент": "Новый банк",
+            POTENTIAL_TURNOVER_LABEL: "123.45", "MCC": "5411", "Банк-конкурент": "Новый банк",
             "Адрес регистрации": "Новый адрес", "Табельный номер": self.other.employee_id,
             "Воронки": "Спарк", "Комментарий менеджера": "Новая информация",
         }])
@@ -262,6 +263,14 @@ class ImportTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(client.registration_address, "Новый адрес")
             self.assertEqual(client.assigned_manager_id, self.other.id)
             self.assertEqual(await session.scalar(select(Comment.body).where(Comment.client_id == client.id)), "Новая информация")
+            workbook = load_workbook(BytesIO(await export_clients_to_workbook(session)))
+            headers = [cell.value for cell in workbook.active[1]]
+            exported = [dict(zip(headers, row)) for row in workbook.active.iter_rows(min_row=2, values_only=True)]
+            self.assertEqual(
+                next(row for row in exported if row["ИНН"] == self.client.tax_number)[POTENTIAL_TURNOVER_LABEL],
+                "123.45",
+            )
+            workbook.close()
 
     async def test_protected_empty_names_can_be_filled(self):
         async with self.factory() as session:
@@ -494,11 +503,24 @@ class ImportTests(unittest.IsolatedAsyncioTestCase):
         status, _, content = await self.request("GET", "/import/template")
         self.assertEqual(status, 200)
         workbook = load_workbook(BytesIO(content))
-        self.assertNotIn("ФИО менеджера", [c.value for c in workbook.active[1]])
-        self.assertNotIn("Дата последней активности менеджера", [c.value for c in workbook.active[1]])
+        headers = [c.value for c in workbook.active[1]]
+        self.assertNotIn("ФИО менеджера", headers)
+        self.assertNotIn("Дата последней активности менеджера", headers)
+        self.assertIn(POTENTIAL_TURNOVER_LABEL, headers)
+        self.assertNotIn("Оборот в месяц", headers)
         self.assertEqual(workbook.active["F2"].number_format, "DD.MM.YYYY")
         workbook.close()
         self.assertFalse(parse_workbook(build_import_template())["rows"][0]["error"])
+        legacy = parse_workbook(self.workbook([{
+            "ИНН": self.client.tax_number, "Оборот в месяц": "321,45",
+        }]))
+        self.assertIn(POTENTIAL_TURNOVER_LABEL, legacy["headers"])
+        self.assertEqual(legacy["rows"][0]["values"]["monthly_turnover"], "321.45")
+        with self.assertRaisesRegex(ValueError, "названия колонок не должны повторяться"):
+            parse_workbook(self.workbook(
+                [{"ИНН": self.client.tax_number, "Оборот в месяц": "1", POTENTIAL_TURNOVER_LABEL: "2"}],
+                headers=["ИНН", "Оборот в месяц", POTENTIAL_TURNOVER_LABEL],
+            ))
         for content in (b"not excel", b"x" * (MAX_FILE_BYTES + 1), self.workbook([{"Организация": "Без ИНН"}])):
             status, _, _ = await self.upload(content)
             self.assertEqual(status, 400)

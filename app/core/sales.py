@@ -11,6 +11,7 @@ CLIENT_STATUSES = (
 )
 CLIENT_STATUS_SET = frozenset(CLIENT_STATUSES)
 FINAL_CLIENT_STATUSES = frozenset({"Подписан", "Отказ", "Нет контактов"})
+POTENTIAL_TURNOVER_LABEL = "Потенциал оборота в месяц"
 
 # Stable codes are persisted in the database; labels may be changed without a
 # data migration. Marks remain a controlled list rather than arbitrary text.

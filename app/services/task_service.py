@@ -7,6 +7,7 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
+from app.core.sales import POTENTIAL_TURNOVER_LABEL
 from app.models import ActivityLog, Client, ClientFunnel, Comment, Funnel, User
 
 
@@ -194,7 +195,7 @@ async def update_client_task(
         ("last_call_date", "last_call_date", "Дата звонка", parse_optional_date),
         ("next_call_date", "next_call_date", "Следующая дата звонка", parse_optional_date),
         ("company_name", "company_name", "Организация", lambda value: value.strip()),
-        ("monthly_turnover", "monthly_turnover", "Оборот в месяц", parse_decimal),
+        ("monthly_turnover", "monthly_turnover", POTENTIAL_TURNOVER_LABEL, parse_decimal),
         ("mcc_code", "mcc_code", "MCC", lambda value: value.strip()),
         ("competitor_bank", "competitor_bank", "Банк-конкурент", lambda value: value.strip()),
         ("registration_address", "registration_address", "Адрес регистрации", lambda value: value.strip()),
@@ -306,7 +307,7 @@ def client_to_export_row(client: Client) -> dict[str, str]:
             client.last_manager_activity_date.isoformat() if client.last_manager_activity_date else ""
         ),
         "Статус": client.status,
-        "Оборот в месяц": str(client.monthly_turnover or ""),
+        POTENTIAL_TURNOVER_LABEL: str(client.monthly_turnover or ""),
         "MCC": client.mcc_code,
         "Банк-конкурент": client.competitor_bank,
         "Адрес регистрации": client.registration_address,

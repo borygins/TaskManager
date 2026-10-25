@@ -13,13 +13,14 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from sqlalchemy import select, update
 
 from app.core.config import settings
+from app.core.sales import POTENTIAL_TURNOVER_LABEL
 from app.db.session import SessionLocal
 from app.models import ContactReportState, User
 from app.services.contacts import ContactRow, aggregate_contacts, list_contacts
 
 
 REPORT_HEADERS = (
-    "ИНН", "Наименование Юр. Лица", "Потенциал оборота в мес", "Канал поступления",
+    "ИНН", "Наименование Юр. Лица", POTENTIAL_TURNOVER_LABEL, "Канал поступления",
     "Статус", "Дата активности", "Вид активности", "Дата следующей активности", "Комментарий",
 )
 logger = logging.getLogger(__name__)
