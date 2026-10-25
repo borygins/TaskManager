@@ -12,6 +12,22 @@
         <div class="badge">Карточка клиента</div>
         <h1>{{ client.company_name or 'Организация не указана' }} • ИНН {{ client.tax_number }}</h1>
         <p class="muted">Директор: {{ client.full_name }}</p>
+        <div class="client-header-meta">
+            <div class="client-funnels" aria-label="Воронки клиента">
+                <span class="muted">Воронки</span>
+                <div class="funnel-tags">
+                    {% for link in client.funnel_links %}
+                    <span class="tag accent">{{ link.funnel.name }}</span>
+                    {% else %}
+                    <span class="tag">Без воронки</span>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="client-owner">
+                <span class="muted">Ответственный</span>
+                <span class="tag">{{ client.assigned_manager.full_name if client.assigned_manager else 'Не назначен' }}</span>
+            </div>
+        </div>
         {% if current_user.role == 'manager' %}
         <a class="secondary-link" href="/clients/{{ client.id }}/contacts/new{% if funnel_id %}?funnel_id={{ funnel_id }}{% endif %}">Активность</a>
         {% endif %}
@@ -28,10 +44,6 @@
     <input type="hidden" name="selected_next_call_date" value="{{ selected_next_call_date }}">
 
     <div class="client-card-head">
-        <div>
-            <h2>{{ client.company_name or 'Организация не указана' }} • ИНН {{ client.tax_number }}</h2>
-            <div class="muted">Директор: {{ client.full_name }}</div>
-        </div>
         <div class="tags">
             <span class="tag">{{ client.status }}</span>
             {% if client.funnel_links|length > 1 %}
@@ -101,11 +113,6 @@
         <span>Комментарий без звонка или встречи</span>
         <textarea name="comment_body" rows="3" placeholder="Сохранится в общей истории, без записи контакта в журнал"></textarea>
     </label>
-
-    <div class="client-meta">
-        <div class="muted">Воронки: {% for link in client.funnel_links %}{{ link.funnel.name }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
-        <div class="muted">Ответственный: {{ client.assigned_manager.full_name if client.assigned_manager else 'Не назначен' }}</div>
-    </div>
 
     <div class="comments-box">
         <div class="muted">История клиента</div>

@@ -164,6 +164,26 @@ button:hover,
     background: rgba(96, 245, 161, 0.12);
 }
 
+.client-header-meta,
+.client-funnels,
+.client-owner {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.client-header-meta {
+    margin: 14px 0 18px;
+    gap: 18px;
+}
+
+.funnel-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 .stats-grid,
 .funnel-grid,
 .assign-grid {

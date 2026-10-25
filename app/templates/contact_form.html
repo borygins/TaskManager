@@ -1,12 +1,30 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="hero compact">
-    <div class="badge">Новый контакт</div>
-    <h1>{{ client.company_name or client.full_name }}</h1>
-    <p class="muted">ИНН {{ client.tax_number }} · {{ client.full_name }} · {{ client.phone or 'Телефон не указан' }}</p>
-    <div class="actions contact-actions">
-        <a class="secondary-link" href="/contacts">Мои звонки и встречи</a>
-        <a class="secondary-link" href="/clients/{{ client.id }}">Карточка клиента</a>
+    <div>
+        <div class="badge">Активность</div>
+        <h1>{{ client.company_name or 'Организация не указана' }} • ИНН {{ client.tax_number }}</h1>
+        <p class="muted">Директор: {{ client.full_name }}</p>
+        <div class="client-header-meta">
+            <div class="client-funnels" aria-label="Воронки клиента">
+                <span class="muted">Воронки</span>
+                <div class="funnel-tags">
+                    {% for link in client.funnel_links %}
+                    <span class="tag accent">{{ link.funnel.name }}</span>
+                    {% else %}
+                    <span class="tag">Без воронки</span>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="client-owner">
+                <span class="muted">Ответственный</span>
+                <span class="tag">{{ client.assigned_manager.full_name if client.assigned_manager else 'Не назначен' }}</span>
+            </div>
+        </div>
+        <div class="actions contact-actions">
+            <a class="secondary-link" href="/contacts">Мои звонки и встречи</a>
+            <a class="secondary-link" href="/clients/{{ client.id }}">Карточка клиента</a>
+        </div>
     </div>
 </section>
 <section class="panel">

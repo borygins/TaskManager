@@ -103,6 +103,9 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status, 200)
         text = body.decode()
         self.assertNotIn('name="dialogue"', text)
+        self.assertIn(f'<h1>{self.client.company_name} • ИНН {self.client.tax_number}</h1>', text)
+        self.assertIn(f'<p class="muted">Директор: {self.client.full_name}</p>', text)
+        self.assertIn(f'<span class="tag">{self.manager.full_name}</span>', text)
         fields = {
             "activity_date": self.today.isoformat(), "activity_type": "Звонок",
             "result": "Переговоры", "potential_turnover": "000000", "funnel_id": str(self.funnel.id),
@@ -125,6 +128,9 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
             return aggregate_contacts(await list_contacts(session, manager_id or self.manager.id, start or self.today, end or self.today))
 
     async def test_client_card_displays_company_and_inn_above_director(self):
+        async with self.factory() as session:
+            session.add(ClientFunnel(client_id=self.client.id, funnel_id=self.funnel.id))
+            await session.commit()
         with patch("app.main.SessionLocal", self.factory):
             for user in (self.manager, self.boss):
                 self.active_user = user
@@ -133,9 +139,12 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 text = body.decode()
                 title = f"{self.client.company_name} • ИНН {self.client.tax_number}"
                 self.assertIn(f'<h1>{title}</h1>', text)
-                self.assertIn(f'<h2>{title}</h2>', text)
+                self.assertEqual(text.count(title), 1)
                 self.assertIn(f'<p class="muted">Директор: {self.client.full_name}</p>', text)
-                self.assertIn(f'<div class="muted">Директор: {self.client.full_name}</div>', text)
+                self.assertEqual(text.count(f"Директор: {self.client.full_name}"), 1)
+                self.assertIn('aria-label="Воронки клиента"', text)
+                self.assertIn(f'<span class="tag accent">{self.funnel.name}</span>', text)
+                self.assertEqual(text.count("Ответственный"), 2 if user.role == "boss" else 1)
                 self.assertNotIn(f'<h2>{self.client.full_name}</h2>', text)
 
     async def unscheduled_section(self, day=None):
