@@ -106,13 +106,11 @@
         <textarea name="comment_body" rows="3" placeholder="Сохранится в общей истории, без записи контакта в журнал"></textarea>
     </label>
 
+    <button type="submit" class="client-save-button">Сохранить изменения</button>
+
     <div class="comments-box">
         <div class="muted">История клиента</div>
         {% include "_client_history.html" %}
-    </div>
-
-    <div class="actions">
-        <button type="submit">Сохранить изменения</button>
     </div>
 </form>
 {% endblock %}

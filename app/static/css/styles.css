@@ -295,6 +295,26 @@ button:hover,
     gap: 14px;
 }
 
+.client-card > .form-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: end;
+}
+
+.client-card > .form-grid > label > span {
+    display: flex;
+    align-items: flex-end;
+    min-height: 2.6em;
+}
+
+.client-card > .form-grid > .wide {
+    margin-bottom: 0;
+}
+
+.client-save-button {
+    width: 100%;
+    margin-bottom: 14px;
+}
+
 .filter-grid-wide {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
@@ -454,6 +474,10 @@ textarea {
 }
 
 @media (max-width: 1200px) {
+    .client-card > .form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .row-list-grid,
     .user-row-grid {
         grid-template-columns: 1fr;
@@ -481,5 +505,15 @@ textarea {
 
     .row-eye-cell {
         justify-content: flex-start;
+    }
+}
+
+@media (max-width: 640px) {
+    .client-card > .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .client-card > .form-grid > label > span {
+        min-height: auto;
     }
 }
