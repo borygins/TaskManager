@@ -28,6 +28,18 @@ class User(Base):
     activities: Mapped[list["ActivityLog"]] = relationship(back_populates="actor")
 
 
+class ClientImport(Base):
+    __tablename__ = "client_imports"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    state: Mapped[str] = mapped_column(String(20), default="pending")
+    payload: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class Funnel(Base):
     __tablename__ = "funnels"
 

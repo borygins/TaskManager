@@ -10,8 +10,8 @@
 <section class="hero compact">
     <div>
         <div class="badge">Карточка клиента</div>
-        <h1>{{ client.full_name }}</h1>
-        <p class="muted">Полная карточка клиента для детальной отработки активности.</p>
+        <h1>{{ client.company_name or 'Организация не указана' }} • ИНН {{ client.tax_number }}</h1>
+        <p class="muted">Директор: {{ client.full_name }}</p>
         {% if current_user.role == 'manager' %}
         <a class="secondary-link" href="/clients/{{ client.id }}/contacts/new{% if funnel_id %}?funnel_id={{ funnel_id }}{% endif %}">Активность</a>
         {% endif %}
@@ -29,8 +29,8 @@
 
     <div class="client-card-head">
         <div>
-            <h2>{{ client.full_name }}</h2>
-            <div class="muted">{{ client.company_name }} • ИНН {{ client.tax_number }}</div>
+            <h2>{{ client.company_name or 'Организация не указана' }} • ИНН {{ client.tax_number }}</h2>
+            <div class="muted">Директор: {{ client.full_name }}</div>
         </div>
         <div class="tags">
             <span class="tag">{{ client.status }}</span>

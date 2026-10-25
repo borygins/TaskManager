@@ -124,6 +124,20 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         async with self.factory() as session:
             return aggregate_contacts(await list_contacts(session, manager_id or self.manager.id, start or self.today, end or self.today))
 
+    async def test_client_card_displays_company_and_inn_above_director(self):
+        with patch("app.main.SessionLocal", self.factory):
+            for user in (self.manager, self.boss):
+                self.active_user = user
+                status, _, body = await self.request("GET", f"/clients/{self.client.id}")
+                self.assertEqual(status, 200)
+                text = body.decode()
+                title = f"{self.client.company_name} • ИНН {self.client.tax_number}"
+                self.assertIn(f'<h1>{title}</h1>', text)
+                self.assertIn(f'<h2>{title}</h2>', text)
+                self.assertIn(f'<p class="muted">Директор: {self.client.full_name}</p>', text)
+                self.assertIn(f'<div class="muted">Директор: {self.client.full_name}</div>', text)
+                self.assertNotIn(f'<h2>{self.client.full_name}</h2>', text)
+
     async def unscheduled_section(self, day=None):
         status, _, body = await self.request("GET", f"/contacts?day={(day or self.today).isoformat()}")
         self.assertEqual(status, 200)

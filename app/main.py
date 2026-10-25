@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -16,6 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.api.deps import get_boss_user, get_current_user
 from app.api.contacts import router as contacts_router
 from app.api.clients import router as clients_router
+from app.api.imports import router as imports_router
 from app.core.config import settings
 from app.core.security import hash_password, normalize_employee_id
 from app.db.session import SessionLocal, init_db
@@ -23,7 +24,7 @@ from app.models import Client, User
 from app.services.auth import authenticate_user
 from app.services.backup import create_backup
 from app.services.contact_reports import retry_pending_reports
-from app.services.excel import build_import_template, export_clients_to_workbook, import_clients_from_excel
+from app.services.excel import build_import_template, export_clients_to_workbook
 from app.services.seed import seed_defaults
 from app.services.task_service import (
     bulk_assign_clients,
@@ -594,20 +595,7 @@ async def download_import_template(current_user: User = Depends(get_boss_user)) 
     )
 
 
-@app.post("/import")
-async def import_excel(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_boss_user),
-) -> RedirectResponse:
-    _ = current_user
-    file_bytes = await file.read()
-    async with SessionLocal() as session:
-        try:
-            await import_clients_from_excel(file_bytes=file_bytes, session=session)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        await session.commit()
-    return RedirectResponse("/dashboard", status_code=status.HTTP_303_SEE_OTHER)
+app.include_router(imports_router)  # /import/template must precede /import/{batch_id}.
 
 
 @app.post("/backup")

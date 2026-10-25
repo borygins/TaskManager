@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+    <div class="badge">Общая база</div><h1>Импорт клиентов</h1>
+    <p class="muted">Один файл с новыми и существующими клиентами. Сопоставление только по ИНН. До подтверждения карточки не изменяются.</p>
+</section>
+{% if not batch %}
+<section class="panel">
+    {% if error %}<div class="error-box" role="alert">{{ error }}</div>{% endif %}
+    <form method="post" action="/import" enctype="multipart/form-data" class="stack-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label><span>Файл XLSX — до 5 МБ и 5000 строк</span><input type="file" name="file" accept=".xlsx" required></label>
+        <div class="actions contact-actions"><button type="submit">Проверить файл</button><a class="secondary-link" href="/import/template">Скачать шаблон</a></div>
+    </form>
+    <p>Пустые ячейки ничего не стирают. Заполненные ФИО, организация, телефон, дата звонка, следующая дата звонка и статус защищены от замены; пустые поля заполняются. ИНН используется только для поиска клиента, а не для изменения его ИНН.</p>
+    <p>Непустые оборот, MCC, банк-конкурент и адрес регистрации обновляются автоматически, без согласования отдельных полей.</p>
+    <p>Непустой табельный номер меняет ответственного. Непустой список воронок <strong>полностью заменяет</strong> прежний; отсутствующие воронки будут созданы.</p>
+    <p class="muted">Комментарии добавляются в историю без повторения одинакового текста. Импорт не записывает звонки и не увеличивает норматив. ИНН и табельные номера рекомендуется хранить как текст.</p>
+</section>
+{% else %}
+<section class="panel">
+    <h2>{{ batch.filename }}</h2>
+    {% if outdated_policy %}
+    <div class="error-box" role="alert">Правила импорта изменились. Загрузите файл снова, чтобы проверить его по новым правилам.</div>
+    {% elif batch.state == 'pending' %}
+    <p class="muted">Предварительный результат. Корректные строки будут сохранены только после подтверждения. Ошибочные строки не загружаются.</p>
+    {% elif batch.state == 'applied' %}
+    <p>Импорт завершён. Изменения сохранены.</p>
+    {% elif batch.state == 'cancelled' %}
+    <p>Загрузка отменена. Изменения не применялись.</p>
+    {% elif batch.state == 'stale' %}
+    <div class="error-box" role="alert">Результат проверки устарел: данные или правила изменились либо прошло более 24 часов. Изменения не применялись. Загрузите файл снова.</div>
+    {% endif %}
+    <div class="stats-grid import-summary">
+        <div class="stat-card"><div>Всего проверено строк</div><strong>{{ plan['total'] }}</strong></div>
+        <div class="stat-card"><div>{{ 'Создано клиентов' if batch.state == 'applied' else 'Новых клиентов' }}</div><strong>{{ plan['counts']['create'] }}</strong></div>
+        <div class="stat-card"><div>{{ 'Обновлено клиентов' if batch.state == 'applied' else 'Клиентов с обновлениями' }}</div><strong>{{ plan['counts']['update'] }}</strong></div>
+        <div class="stat-card"><div>Без изменений</div><strong>{{ plan['counts']['unchanged'] }}</strong></div>
+        <div class="stat-card"><div>Строк с ошибками</div><strong>{{ plan['counts']['error'] }}</strong></div>
+        <div class="stat-card"><div>Повторных строк — пропущено</div><strong>{{ plan['counts']['duplicate'] }}</strong></div>
+    </div>
+    <div class="actions contact-actions">
+        {% if batch.state == 'pending' and not outdated_policy %}
+        {% if plan['apply_count'] %}
+        <form method="post" action="/import/{{ batch.id }}/confirm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit">Применить изменения к {{ plan['apply_count'] }} клиентам</button>
+        </form>
+        {% else %}
+        <p class="muted">Нет изменений для применения.</p>
+        {% endif %}
+        <form method="post" action="/import/{{ batch.id }}/cancel">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="secondary">Отмена</button>
+        </form>
+        {% endif %}
+        <a class="secondary-link" href="/import/{{ batch.id }}/report">Скачать отчёт</a>
+        <a class="secondary-link" href="/import">Проверить другой файл</a>
+    </div>
+    <p class="muted">В отчёте — все строки и пояснения. Используйте фильтр в Excel по результату импорта, чтобы выбрать новые, обновлённые, без изменений, ошибки или повторы. Исходные колонки содержат данные из файла, а не итоговые значения карточки.</p>
+</section>
+{% endif %}
+{% endblock %}
