@@ -15,10 +15,11 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import get_current_user, get_manager_user
 from app.core.config import settings
+from app.core.sales import ACTIVITY_MARKS, CLIENT_STATUSES, FINAL_CLIENT_STATUSES
 from app.db.session import SessionLocal
 from app.models import Client, ContactActivity, ContactReportState, User
 from app.services.contact_reports import REPORT_HEADERS, build_contact_workbook, generate_daily_report
-from app.services.contacts import CONTACT_RESULTS, aggregate_contacts, list_contacts, parse_contact, record_contact
+from app.services.contacts import aggregate_contacts, list_contacts, parse_contact, record_contact
 from app.services.task_service import get_client_with_details
 
 
@@ -89,7 +90,7 @@ async def form_response(request: Request, client_id: int, user: User, values=Non
     if values is None:
         values = {
             "activity_date": date.today().isoformat(), "activity_type": "Звонок",
-            "potential_turnover": "000000", "result": "",
+            "client_status": client.status,
             "comment": "", "next_activity_date": "",
         }
     values = dict(values)
@@ -99,7 +100,8 @@ async def form_response(request: Request, client_id: int, user: User, values=Non
     return render(request, "contact_form.html", {
         "current_user": user, "client": client,
         "values": values, "error": error,
-        "results": CONTACT_RESULTS, "today": date.today().isoformat(),
+        "statuses": CLIENT_STATUSES, "marks": ACTIVITY_MARKS,
+        "today": date.today().isoformat(),
     }, status_code)
 
 
@@ -153,10 +155,11 @@ async def contacts_page(request: Request, day: str | None = None, q: str = "", u
     async with SessionLocal() as session:
         rows = aggregate_contacts(await list_contacts(session, user.id, selected_day, selected_day))
         base = select(Client).where(Client.assigned_manager_id == user.id)
-        due = list((await session.execute(base.where(Client.next_call_date == selected_day).order_by(Client.company_name))).scalars())
-        overdue = list((await session.execute(base.where(Client.next_call_date < selected_day).order_by(Client.next_call_date, Client.company_name))).scalars())
+        active_base = base.where(Client.status.not_in(FINAL_CLIENT_STATUSES))
+        due = list((await session.execute(active_base.where(Client.next_call_date == selected_day).order_by(Client.company_name))).scalars())
+        overdue = list((await session.execute(active_base.where(Client.next_call_date < selected_day).order_by(Client.next_call_date, Client.company_name))).scalars())
         unscheduled = list((await session.execute(
-            base.where(Client.next_call_date.is_(None)).order_by(Client.company_name, Client.id)
+            active_base.where(Client.next_call_date.is_(None)).order_by(Client.company_name, Client.id)
         )).scalars())
         found = []
         if q.strip():

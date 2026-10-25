@@ -28,8 +28,8 @@
     </div>
 </section>
 <section class="panel">
-    <h2>Результат активности</h2>
-    <p class="muted">Записывайте выполненный звонок или встречу. Следующая дата автоматически попадает в план. Канал берётся из первой воронки клиента, а без воронок указывается «Прочее». Обычное изменение карточки не считается контактом.</p>
+    <h2>Новая активность</h2>
+    <p class="muted">Запишите звонок или встречу и при необходимости измените статус клиента. Воронка и потенциал оборота берутся из карточки автоматически. Обычное изменение карточки не считается контактом.</p>
     {% if error %}<div class="error-box" role="alert">{{ error }}</div>{% endif %}
     <form method="post" action="/clients/{{ client.id }}/contacts" class="stack-form" data-contact-form>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -43,23 +43,31 @@
                     {% for kind in ['Звонок', 'Встреча'] %}<option {% if values.activity_type == kind %}selected{% endif %}>{{ kind }}</option>{% endfor %}
                 </select>
             </label>
-            <label><span>Статус / результат</span>
-                <select name="result" required>
-                    <option value="">Выберите результат</option>
-                    {% for result in results %}<option {% if values.result == result %}selected{% endif %}>{{ result }}</option>{% endfor %}
+            <label><span>Статус клиента</span>
+                <select name="client_status" required>
+                    {% for status_name in statuses %}<option value="{{ status_name }}" {% if values.client_status == status_name %}selected{% endif %}>{{ status_name }}</option>{% endfor %}
                 </select>
-            </label>
-            <label><span>Потенциал оборота в месяц</span>
-                <input type="text" inputmode="decimal" name="potential_turnover" value="{{ values.potential_turnover }}" required>
             </label>
             <label><span>Дата следующей активности</span>
                 <input type="date" name="next_activity_date" value="{{ values.next_activity_date }}">
-                <small class="muted">Обязательна при недозвоне и переносе.</small>
+                <small class="muted">Обязательна при отметке #недозвон.</small>
             </label>
         </div>
+        <fieldset class="marks-fieldset">
+            <legend>Отметки</legend>
+            <div class="marks-grid">
+                {% for code, label in marks.items() %}
+                <label class="mark-choice">
+                    <input type="checkbox" name="mark_{{ code }}" value="1" {% if values.get('mark_' ~ code) == '1' %}checked{% endif %}>
+                    <span>{{ label }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            <small class="muted">Отметки помогают быстро понять текущую ситуацию. Они попадут в комментарий журнала, но не заменяют статус клиента.</small>
+        </fieldset>
         <label><span>Комментарий</span><textarea name="comment" rows="4" maxlength="10000" required>{{ values.comment }}</textarea></label>
-        <div class="hint">Любой статус, кроме «Недозвон», засчитывается в норму. Один клиент — один контакт за день, независимо от числа звонков и встреч. Недозвоны сохраняются в истории.</div>
-        <button type="submit">Сохранить контакт</button>
+        <div class="hint">Активность с отметкой #недозвон сохранится в истории, но не засчитается в норму. В остальных случаях один клиент даёт один контакт за день, независимо от числа звонков и встреч.</div>
+        <button type="submit">Сохранить</button>
     </form>
 </section>
 <section class="panel">

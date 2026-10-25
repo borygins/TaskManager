@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.sqlite import insert
@@ -10,26 +10,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.core.sales import (
-    CALL_BACK_MARK,
-    CLIENT_STATUSES,
+    ACTIVITY_MARKS,
+    ACTIVITY_MARK_CODES,
     CLIENT_STATUS_SET,
     MISSED_CALL_MARK,
+    mark_labels,
 )
 from app.models import Client, ClientFunnel, Comment, ContactActivity, ContactReportState, Funnel, User
 from app.services.task_service import append_daily_activity
-
-
-# Temporary input choices until the simplified activity form is introduced.
-# The client stages themselves come from the single canonical catalogue.
-CONTACT_RESULTS = ("Недозвон", "Перенос на дату", *CLIENT_STATUSES)
 
 
 @dataclass(frozen=True)
 class ContactInput:
     activity_date: date
     activity_type: str
-    result: str
-    potential_turnover: Decimal
+    client_status: str
+    marks: tuple[str, ...]
     next_activity_date: date | None
     comment: str
 
@@ -46,27 +42,28 @@ def parse_contact(form: dict[str, str]) -> ContactInput:
     if next_day and next_day < day:
         raise ValueError("Следующая дата не может быть раньше даты активности.")
     kind = form.get("activity_type", "")
-    result = form.get("result", "")
-    if kind not in {"Звонок", "Встреча"} or result not in CONTACT_RESULTS:
-        raise ValueError("Выберите вид активности и результат из списка.")
-    if kind == "Встреча" and result == "Недозвон":
-        raise ValueError("Для встречи нельзя выбрать результат «Недозвон».")
-    if result in {"Недозвон", "Перенос на дату"} and not next_day:
-        raise ValueError("При недозвоне или переносе обязательно укажите следующую дату.")
+    client_status = form.get("client_status", "").strip()
+    if kind not in {"Звонок", "Встреча"} or client_status not in CLIENT_STATUS_SET:
+        raise ValueError("Выберите вид активности и статус клиента из списка.")
+    submitted_marks = {
+        key.removeprefix("mark_")
+        for key, value in form.items()
+        if key.startswith("mark_") and value == "1"
+    }
+    if not submitted_marks.issubset(ACTIVITY_MARK_CODES):
+        raise ValueError("Выберите отметки из списка.")
+    marks = tuple(code for code in ACTIVITY_MARKS if code in submitted_marks)
+    missed_call = MISSED_CALL_MARK in marks
+    if kind == "Встреча" and missed_call:
+        raise ValueError("Для встречи нельзя выбрать отметку #недозвон.")
+    if missed_call and not next_day:
+        raise ValueError("При недозвоне обязательно укажите следующую дату.")
     comment = form.get("comment", "").strip()
     if not comment:
         raise ValueError("Напишите комментарий к активности.")
     if len(comment) > 10000:
         raise ValueError("Комментарий не должен превышать 10 000 символов.")
-    try:
-        amount = Decimal(form.get("potential_turnover", "000000").replace(" ", "").replace(",", "."))
-        if not amount.is_finite() or amount < 0 or amount > Decimal("999999999999.99"):
-            raise ValueError
-        if amount != amount.quantize(Decimal("0.01")):
-            raise ValueError
-    except (InvalidOperation, ValueError) as exc:
-        raise ValueError("Потенциал оборота: число от 0 до 999999999999,99, не более двух знаков после запятой.") from exc
-    return ContactInput(day, kind, result, amount, next_day, comment)
+    return ContactInput(day, kind, client_status, marks, next_day, comment)
 
 
 async def record_contact(
@@ -94,17 +91,14 @@ async def record_contact(
     latest_day = (await session.execute(
         select(func.max(ContactActivity.activity_date)).where(ContactActivity.client_id == client.id)
     )).scalar_one()
-    client_status = data.result if data.result in CLIENT_STATUS_SET else client.status
-    marks = []
-    if data.result == "Недозвон":
-        marks.append(MISSED_CALL_MARK)
-    elif data.result == "Перенос на дату":
-        marks.append(CALL_BACK_MARK)
+    missed_call = MISSED_CALL_MARK in data.marks
+    result = "Недозвон" if missed_call else "Контакт состоялся"
+    potential_turnover = Decimal(str(client.monthly_turnover or 0))
     contact = ContactActivity(
         request_key=request_key, client_id=client.id, manager_id=actor.id,
         funnel_id=funnel.id if funnel else None, activity_date=data.activity_date, activity_type=data.activity_type,
-        dialogue=data.result != "Недозвон", result=data.result, client_status=client_status, marks=marks,
-        potential_turnover=data.potential_turnover,
+        dialogue=not missed_call, result=result, client_status=data.client_status, marks=list(data.marks),
+        potential_turnover=potential_turnover,
         next_activity_date=data.next_activity_date,
         comment_record=Comment(client_id=client.id, author_id=actor.id, body=data.comment, source="contact"),
         tax_number=client.tax_number, company_name=client.company_name or client.full_name,
@@ -115,16 +109,20 @@ async def record_contact(
     # A historical entry must not replace a newer plan or sales stage.
     if latest_day is None or data.activity_date >= latest_day:
         client.next_call_date = data.next_activity_date
-        if data.result in CLIENT_STATUS_SET:
-            client.status = data.result
+        client.status = data.client_status
     if data.activity_type == "Звонок":
         client.last_call_date = max(client.last_call_date or data.activity_date, data.activity_date)
     client.last_manager_activity_date = max(
         client.last_manager_activity_date or data.activity_date, data.activity_date,
     )
+    marks_text = " ".join(mark_labels(data.marks))
+    summary = f"{data.activity_date:%d.%m.%Y} — {data.activity_type}: {data.client_status}."
+    if marks_text:
+        summary += f" {marks_text}"
+    summary += f" {data.comment}"
     await append_daily_activity(
         client.id, actor,
-        [f"{data.activity_date:%d.%m.%Y} — {data.activity_type}: {data.result}. {data.comment}"], session,
+        [summary], session,
     )
     # A durable marker allows generation to be retried after Excel locks or restarts.
     statement = insert(ContactReportState).values(
@@ -170,13 +168,15 @@ def aggregate_contacts(contacts: list[ContactActivity]) -> list[ContactRow]:
     for item in sorted(contacts, key=lambda c: (c.activity_date, c.created_at, c.id)):
         key = (item.manager_id, item.activity_date, item.client_id)
         previous = rows.get(key)
+        labels = " ".join(mark_labels(item.marks or []))
+        comment = f"{labels} {item.comment_record.body}".strip()
         rows[key] = ContactRow(
             client_id=item.client_id, manager_id=item.manager_id, day=item.activity_date,
             tax_number=item.tax_number, company_name=item.company_name,
             potential=item.potential_turnover, channel=item.funnel_name, status=item.client_status,
             kind="Встреча" if item.activity_type == "Встреча" or (previous and previous.kind == "Встреча") else "Звонок",
             next_day=item.next_activity_date,
-            comment=f"{previous.comment} = {item.comment_record.body}" if previous else item.comment_record.body,
+            comment=f"{previous.comment} = {comment}" if previous else comment,
             qualified=bool(MISSED_CALL_MARK not in item.marks or (previous and previous.qualified)),
         )
     return list(rows.values())

@@ -19,11 +19,12 @@ from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.deps import get_current_user
+from app.core.sales import CLIENT_STATUSES
 from app.db.session import Base, configure_sqlite
 from app.main import app
 from app.models import Client, ClientFunnel, Comment, ContactActivity, ContactReportState, Funnel, User
 from app.services.contact_reports import REPORT_HEADERS, build_contact_workbook, retry_pending_reports
-from app.services.contacts import CONTACT_RESULTS, aggregate_contacts, list_contacts
+from app.services.contacts import aggregate_contacts, list_contacts
 
 
 class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
@@ -110,16 +111,24 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         text = body.decode()
         self.assertNotIn('name="dialogue"', text)
         self.assertNotIn('name="funnel_id"', text)
+        self.assertNotIn('name="result"', text)
+        self.assertNotIn('name="potential_turnover"', text)
+        self.assertIn('name="client_status"', text)
+        self.assertIn('name="mark_missed_call"', text)
         self.assertIn(f'<h1>{expected_client.company_name} • ИНН {expected_client.tax_number}</h1>', text)
         self.assertIn(f'<p class="muted">Директор: {expected_client.full_name}</p>', text)
         self.assertIn(f'<span class="tag">{self.manager.full_name}</span>', text)
+        async with self.factory() as session:
+            current_status = (await session.get(Client, client_id)).status
         fields = {
             "activity_date": self.today.isoformat(), "activity_type": "Звонок",
-            "result": "Переговоры", "potential_turnover": "000000",
+            "client_status": current_status,
             "next_activity_date": "", "comment": "Обсудили условия",
         }
         for name in ("csrf_token", "submission_token"):
             fields[name] = html.unescape(re.search(rf'name="{name}" value="([^"]+)"', text).group(1))
+        for mark in changes.pop("marks", ()):
+            fields[f"mark_{mark}"] = "1"
         fields.update(changes)
         return fields
 
@@ -148,6 +157,7 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(f'<h1>{title}</h1>', text)
                 self.assertEqual(text.count(title), 1)
                 self.assertIn(f'<p class="muted">Директор: {self.client.full_name}</p>', text)
+                self.assertNotIn('name="status"', text)
                 self.assertEqual(text.count(f"Директор: {self.client.full_name}"), 1)
                 self.assertIn('aria-label="Воронки клиента"', text)
                 self.assertIn(f'<span class="tag accent">{self.funnel.name}</span>', text)
@@ -352,7 +362,7 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(json.loads(body), {"count": 0})
         await self.save(comment="Первый звонок")
         await self.save(comment="Повторный звонок")
-        await self.save(self.second_client.id, result="Недозвон", next_activity_date=self.today.isoformat())
+        await self.save(self.second_client.id, marks=["missed_call"], next_activity_date=self.today.isoformat())
         earlier = self.today.replace(day=1) - timedelta(days=1)
         await self.save(activity_date=earlier.isoformat())
         with patch("app.api.contacts.build_contact_workbook") as build:
@@ -416,6 +426,45 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         section = await self.unscheduled_section()
         self.assertIn("Клиентов без следующей даты нет.", section)
         self.assertNotIn('class="client-list-grid client-list-row"', section)
+
+    async def test_final_statuses_leave_plans_but_client_can_be_reopened_by_activity(self):
+        no_contacts = None
+        async with self.factory() as session:
+            first = await session.get(Client, self.client.id)
+            first.status = "Подписан"
+            first.next_call_date = self.today
+            second = await session.get(Client, self.second_client.id)
+            second.status = "Отказ"
+            second.next_call_date = self.today - timedelta(days=1)
+            no_contacts = Client(
+                full_name="Финальный клиент", company_name="ООО Финал",
+                tax_number="770000000004", assigned_manager_id=self.manager.id,
+                status="Нет контактов", next_call_date=None,
+            )
+            session.add(no_contacts)
+            await session.commit()
+            no_contacts_id = no_contacts.id
+
+        status, _, body = await self.request("GET", f"/contacts?day={self.today.isoformat()}")
+        self.assertEqual(status, 200)
+        text = body.decode()
+        for tax_number in (self.client.tax_number, self.second_client.tax_number, no_contacts.tax_number):
+            self.assertNotIn(tax_number, text)
+
+        status, _, body = await self.request("GET", "/contacts?" + urlencode({"q": "ООО Ромашка"}))
+        self.assertEqual(status, 200)
+        self.assertIn(self.client.tax_number, body.decode())
+
+        await self.save(
+            self.client.id, client_status="Переговоры",
+            next_activity_date=self.today.isoformat(), comment="Вернули в работу",
+        )
+        status, _, body = await self.request("GET", f"/contacts?day={self.today.isoformat()}")
+        self.assertEqual(status, 200)
+        self.assertIn(self.client.tax_number, body.decode())
+        async with self.factory() as session:
+            self.assertEqual((await session.get(Client, self.client.id)).status, "Переговоры")
+            self.assertEqual((await session.get(Client, no_contacts_id)).status, "Нет контактов")
 
     async def new_client_fields(self, **changes):
         status, _, body = await self.request("GET", f"/clients/new?funnel_id={self.funnel.id}")
@@ -593,12 +642,14 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 ClientFunnel(client_id=self.client.id, funnel_id=self.funnel.id),
                 ClientFunnel(client_id=self.client.id, funnel_id=self.second_funnel.id),
             ])
+            client = await session.get(Client, self.client.id)
+            client.monthly_turnover = Decimal("450000")
             await session.commit()
-        await self.save(result="Недозвон", next_activity_date=tomorrow, comment="Не ответил")
+        await self.save(marks=["missed_call"], next_activity_date=tomorrow, comment="Не ответил")
         self.assertFalse((await self.report_rows())[0].qualified)
-        await self.save(result="Перенос на дату", next_activity_date=tomorrow, comment="Обсудили условия", potential_turnover="300000")
-        await self.save(activity_type="Встреча", result="Подписан", comment="Подписали договор", potential_turnover="500000")
-        await self.save(result="Недозвон", next_activity_date=tomorrow, comment="Не ответил повторно", potential_turnover="450000")
+        await self.save(marks=["call_back"], client_status="Переговоры", next_activity_date=tomorrow, comment="Обсудили условия")
+        await self.save(activity_type="Встреча", client_status="Подписан", comment="Подписали договор")
+        await self.save(marks=["missed_call"], next_activity_date=tomorrow, comment="Не ответил повторно")
         rows = await self.report_rows()
         self.assertEqual(len(rows), 1)
         row = rows[0]
@@ -608,7 +659,7 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row.potential, Decimal("450000"))
         self.assertEqual(row.channel, self.funnel.name)
         self.assertEqual(row.next_day, self.today + timedelta(days=1))
-        self.assertEqual(row.comment, "Не ответил = Обсудили условия = Подписали договор = Не ответил повторно")
+        self.assertEqual(row.comment, "#недозвон Не ответил = #перезвонить Обсудили условия = Подписали договор = #недозвон Не ответил повторно")
         paths = list((self.root / "reports").rglob("*.xlsx"))
         self.assertEqual(len(paths), 1)
         workbook = load_workbook(paths[0])
@@ -744,11 +795,10 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_validation_preserves_form_and_creates_no_records(self):
         for changes in (
-            {"result": "Недозвон"},
-            {"result": "Перенос на дату"},
-            {"comment": "  "}, {"potential_turnover": "NaN"}, {"potential_turnover": "-1"},
-            {"potential_turnover": "0.001"}, {"potential_turnover": "1000000000000"},
-            {"activity_type": "Встреча", "result": "Недозвон"},
+            {"marks": ["missed_call"]},
+            {"comment": "  "}, {"client_status": "Неизвестный статус"},
+            {"mark_unknown": "1"},
+            {"activity_type": "Встреча", "marks": ["missed_call"], "next_activity_date": self.today.isoformat()},
             {"activity_date": (self.today + timedelta(days=1)).isoformat()},
             {"next_activity_date": (self.today - timedelta(days=1)).isoformat()},
         ):
@@ -759,25 +809,26 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn('name="submission_token"', body.decode())
         self.assertEqual(await self.report_rows(), [])
 
-    async def test_every_status_except_no_answer_counts_without_dialogue_field(self):
-        for index, result in enumerate(CONTACT_RESULTS):
-            with self.subTest(result=result):
+    async def test_every_client_status_counts_without_dialogue_field(self):
+        for index, client_status in enumerate(CLIENT_STATUSES):
+            with self.subTest(client_status=client_status):
                 day = self.today - timedelta(days=index)
-                await self.save(result=result, activity_date=day.isoformat(), next_activity_date=self.today.isoformat())
+                await self.save(client_status=client_status, activity_date=day.isoformat(), next_activity_date=self.today.isoformat())
                 row = (await self.report_rows(start=day, end=day))[0]
-                self.assertEqual(row.qualified, result != "Недозвон")
+                self.assertTrue(row.qualified)
+                self.assertEqual(row.status, client_status)
                 async with self.factory() as session:
                     contact = (await list_contacts(session, self.manager.id, day, day))[0]
-                    self.assertEqual(contact.dialogue, result != "Недозвон")
+                    self.assertTrue(contact.dialogue)
 
-    async def test_status_overrides_legacy_dialogue_flags(self):
-        await self.save(result="Недозвон", dialogue="yes", next_activity_date=self.today.isoformat())
+    async def test_missed_call_mark_overrides_legacy_dialogue_flags(self):
+        await self.save(marks=["missed_call"], dialogue="yes", next_activity_date=self.today.isoformat())
         async with self.factory() as session:
             contact = (await list_contacts(session, self.manager.id, self.today, self.today))[0]
             contact.dialogue = True
             await session.commit()
         self.assertFalse((await self.report_rows())[0].qualified)
-        await self.save(result="Отказ", dialogue="no")
+        await self.save(client_status="Отказ", dialogue="no")
         async with self.factory() as session:
             contacts = await list_contacts(session, self.manager.id, self.today, self.today)
             for contact in contacts:
@@ -807,8 +858,8 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_historical_contact_does_not_replace_current_plan(self):
         future = self.today + timedelta(days=5)
-        await self.save(result="Перенос на дату", next_activity_date=future.isoformat())
-        await self.save(activity_date=(self.today - timedelta(days=1)).isoformat(), result="Отказ")
+        await self.save(marks=["call_back"], client_status="Переговоры", next_activity_date=future.isoformat())
+        await self.save(activity_date=(self.today - timedelta(days=1)).isoformat(), client_status="Отказ")
         async with self.factory() as session:
             client = await session.get(Client, self.client.id)
             self.assertEqual(client.next_call_date, future)
@@ -821,7 +872,7 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("ООО Ромашка", body.decode())
 
     async def test_workbook_text_is_not_executed_as_formula(self):
-        await self.save(comment="=HYPERLINK(\"https://example.com\")", potential_turnover="000000")
+        await self.save(comment="=HYPERLINK(\"https://example.com\")")
         rows = await self.report_rows()
         workbook = load_workbook(BytesIO(build_contact_workbook(rows, "Менеджер", "День")))
         self.assertEqual(workbook.active["I4"].data_type, "s")

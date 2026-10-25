@@ -24,7 +24,7 @@
     <h1>Мои звонки и встречи</h1>
     <p>Контактов за {{ day.strftime('%d.%m.%Y') }}: <strong>{{ completed }} из 20</strong></p>
     <progress class="contact-progress" value="{{ [completed, 20]|min }}" max="20">{{ completed }} из 20</progress>
-    <p class="muted">Уникальные клиенты с любым статусом, кроме «Недозвон». Повторные звонки и встречи с тем же клиентом не увеличивают норму.</p>
+    <p class="muted">Уникальные клиенты без отметки #недозвон. Повторные звонки и встречи с тем же клиентом не увеличивают норму.</p>
     <div class="actions contact-actions">
         <a class="secondary-link" href="/clients/new">Добавить клиента</a>
         <a class="secondary-link" href="/contacts/export?day={{ day.isoformat() }}&manager_id={{ current_user.id }}" data-export-confirm>Скачать Excel за день</a>
@@ -54,7 +54,7 @@
 <section class="panel"><h2>Назначено на {{ day.strftime('%d.%m.%Y') }} · {{ due|length }}</h2>{{ client_list(due) }}</section>
 <section class="panel" id="unscheduled-clients">
     <h2>Без следующей даты · {{ unscheduled|length }}</h2>
-    <p class="muted">Ваши клиенты без назначенной следующей активности, независимо от выбранного дня. Нажмите на строку, чтобы открыть и изменить карточку клиента.</p>
+    <p class="muted">Ваши незавершённые клиенты без назначенной следующей активности, независимо от выбранного дня. Нажмите на строку, чтобы открыть карточку клиента.</p>
     {{ client_list(unscheduled, show_date=false, empty_message='Клиентов без следующей даты нет.') }}
 </section>
 <section class="panel"><h2>Журнал за день</h2>{% include '_contact_table.html' %}</section>

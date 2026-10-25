@@ -1,7 +1,10 @@
 <p class="muted">Комментарии, импорт, звонки и встречи всех авторов. Новые записи сверху. Обычные заметки не учитываются в норме контактов.</p>
 {% for comment in client.comments|reverse %}
 <article class="comment-item">
-    <strong>{% if comment.contact %}{{ comment.contact.activity_type }} · {{ comment.contact.activity_date.strftime('%d.%m.%Y') }} · {{ comment.contact.result }}{% else %}{{ comment.source_label }}{% endif %}</strong>
+    <strong>{% if comment.contact %}{{ comment.contact.activity_type }} · {{ comment.contact.activity_date.strftime('%d.%m.%Y') }} · {{ comment.contact.client_status }}{% else %}{{ comment.source_label }}{% endif %}</strong>
+    {% if comment.contact and comment.contact.mark_labels %}
+    <div class="history-marks">{% for label in comment.contact.mark_labels %}<span class="tag">{{ label }}</span>{% endfor %}</div>
+    {% endif %}
     <div class="activity-body">{{ comment.body }}</div>
     <div class="muted">{{ comment.author.full_name if comment.author else 'Автор неизвестен' }} · Добавлено: {{ comment.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
 </article>

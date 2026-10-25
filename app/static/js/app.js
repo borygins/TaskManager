@@ -30,18 +30,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     document.querySelectorAll("[data-contact-form]").forEach((form) => {
         const kind = form.elements.activity_type;
-        const result = form.elements.result;
+        const missedCall = form.elements.mark_missed_call;
         const nextDate = form.elements.next_activity_date;
         const update = () => {
             const meeting = kind.value === "Встреча";
-            for (const option of result.options) {
-                if (option.value === "Недозвон") option.disabled = meeting;
-            }
-            if (meeting && result.value === "Недозвон") result.value = "";
-            nextDate.required = ["Недозвон", "Перенос на дату"].includes(result.value);
+            missedCall.disabled = meeting;
+            if (meeting) missedCall.checked = false;
+            nextDate.required = missedCall.checked;
             nextDate.min = form.elements.activity_date.value;
         };
-        [kind, result, form.elements.activity_date].forEach((input) => input.addEventListener("change", update));
+        [kind, missedCall, form.elements.activity_date].forEach((input) => input.addEventListener("change", update));
         form.addEventListener("submit", () => {
             const button = form.querySelector('button[type="submit"]');
             button.disabled = true;
@@ -50,7 +48,7 @@ document.addEventListener("DOMContentLoaded", () => {
         window.addEventListener("pageshow", () => {
             const button = form.querySelector('button[type="submit"]');
             button.disabled = false;
-            button.textContent = "Сохранить контакт";
+            button.textContent = "Сохранить";
         });
         update();
     });

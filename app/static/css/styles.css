@@ -184,6 +184,60 @@ button:hover,
     gap: 8px;
 }
 
+.marks-fieldset {
+    margin: 0;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 14px;
+}
+
+.marks-fieldset legend {
+    padding: 0 6px;
+}
+
+.marks-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.mark-choice {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    width: auto;
+    padding: 8px 11px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.03);
+    cursor: pointer;
+}
+
+.mark-choice input {
+    width: auto;
+    margin: 0;
+    accent-color: var(--accent-2);
+}
+
+.mark-choice:has(input:checked) {
+    border-color: rgba(96, 245, 161, 0.45);
+    background: rgba(96, 245, 161, 0.1);
+}
+
+.mark-choice:has(input:disabled) {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.history-marks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0 4px;
+}
+
 .stats-grid,
 .funnel-grid,
 .assign-grid {

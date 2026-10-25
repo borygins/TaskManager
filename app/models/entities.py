@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.sales import CLIENT_STATUSES
+from app.core.sales import CLIENT_STATUSES, mark_labels as resolve_mark_labels
 from app.db.session import Base
 
 
@@ -161,6 +161,10 @@ class ContactActivity(Base):
 
     manager: Mapped[User] = relationship()
     comment_record: Mapped[Comment] = relationship(back_populates="contact", lazy="raise")
+
+    @property
+    def mark_labels(self) -> list[str]:
+        return resolve_mark_labels(self.marks or [])
 
 
 class ContactReportState(Base):

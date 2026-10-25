@@ -27,7 +27,6 @@ ACTIVITY_MARKS = {
 }
 ACTIVITY_MARK_CODES = frozenset(ACTIVITY_MARKS)
 MISSED_CALL_MARK = "missed_call"
-CALL_BACK_MARK = "call_back"
 
 
 def mark_labels(codes: list[str] | tuple[str, ...]) -> list[str]:

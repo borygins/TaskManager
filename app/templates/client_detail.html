@@ -66,14 +66,6 @@
             <input type="date" name="next_call_date" value="{{ client.next_call_date.isoformat() if client.next_call_date else '' }}">
         </label>
         <label>
-            <span>Статус</span>
-            <select name="status">
-                {% for status_name in statuses %}
-                <option value="{{ status_name }}" {% if client.status == status_name %}selected{% endif %}>{{ status_name }}</option>
-                {% endfor %}
-            </select>
-        </label>
-        <label>
             <span>Организация</span>
             <input type="text" name="company_name" value="{{ client.company_name or '' }}">
         </label>
