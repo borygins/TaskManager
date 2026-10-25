@@ -98,8 +98,8 @@
     </div>
 
     <label class="wide">
-        <span>Комментарии к активности</span>
-        <textarea name="comment_body" rows="3" placeholder="Комментарий попадет в историю активности клиента"></textarea>
+        <span>Комментарий без звонка или встречи</span>
+        <textarea name="comment_body" rows="3" placeholder="Сохранится в общей истории, без записи контакта в журнал"></textarea>
     </label>
 
     <div class="client-meta">
@@ -108,16 +108,8 @@
     </div>
 
     <div class="comments-box">
-        <div class="muted">История комментариев</div>
-        {% for comment in client.comments|reverse %}
-        <div class="comment-item">
-            <strong>{{ comment.author.full_name }}</strong>
-            <div>{{ comment.body }}</div>
-            <div class="muted">{{ comment.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
-        </div>
-        {% else %}
-        <div class="muted">Комментариев пока нет.</div>
-        {% endfor %}
+        <div class="muted">История клиента</div>
+        {% include "_client_history.html" %}
     </div>
 
     <div class="actions">

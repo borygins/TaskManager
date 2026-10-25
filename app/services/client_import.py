@@ -24,7 +24,7 @@ from app.services.task_service import append_daily_activity
 
 MAX_FILE_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 5000
-IMPORT_POLICY_VERSION = 3
+IMPORT_POLICY_VERSION = 4
 FIELDS = {
     "ФИО": "full_name", "Организация": "company_name", "Телефон": "phone",
     "Дата звонка": "last_call_date", "Следующая дата звонка": "next_call_date",
@@ -319,7 +319,7 @@ async def apply_plan(session: AsyncSession, actor: User, plan: dict) -> None:
                     await session.flush()
                 session.add(ClientFunnel(client_id=client.id, funnel_id=funnel.id))
         if comment:
-            session.add(Comment(client_id=client.id, author_id=actor.id, body=comment))
+            session.add(Comment(client_id=client.id, author_id=actor.id, body=comment, source="import"))
         await append_daily_activity(client.id, actor, [
             "Импорт Excel: " + change["label"] + ": " + str(change["old"] or "—") + " → " + str(change["new"])
             for change in row["changes"]

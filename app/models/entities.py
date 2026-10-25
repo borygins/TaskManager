@@ -59,7 +59,6 @@ class Client(Base):
     company_name: Mapped[str] = mapped_column(String(255), default="")
     tax_number: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     phone: Mapped[str] = mapped_column(String(64), default="")
-    manager_notes: Mapped[str] = mapped_column(Text, default="")
     last_call_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     next_call_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     last_manager_activity_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -77,7 +76,7 @@ class Client(Base):
     comments: Mapped[list["Comment"]] = relationship(
         back_populates="client",
         cascade="all, delete-orphan",
-        order_by="Comment.created_at",
+        order_by="(Comment.created_at, Comment.id)",
     )
     activities: Mapped[list["ActivityLog"]] = relationship(back_populates="client", cascade="all, delete-orphan")
 
@@ -100,12 +99,20 @@ class Comment(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     client_id: Mapped[int] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
-    author_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     body: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(32), default="card")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
     client: Mapped[Client] = relationship(back_populates="comments")
-    author: Mapped[User] = relationship(back_populates="comments")
+    author: Mapped[User | None] = relationship(back_populates="comments")
+    contact: Mapped["ContactActivity | None"] = relationship(back_populates="comment_record")
+
+    @property
+    def source_label(self) -> str:
+        return {"card": "Комментарий", "contact": "Контакт", "import": "Импорт Excel",
+                "legacy": "Прежний комментарий — источник неизвестен",
+                "legacy_notes": "Перенесённая заметка — исходные автор и дата неизвестны"}.get(self.source, self.source)
 
 
 class ActivityLog(Base):
@@ -140,13 +147,14 @@ class ContactActivity(Base):
     result: Mapped[str] = mapped_column(String(64))
     potential_turnover: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     next_activity_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    comment: Mapped[str] = mapped_column(Text)
+    comment_id: Mapped[int] = mapped_column(ForeignKey("comments.id"), unique=True)
     tax_number: Mapped[str] = mapped_column(String(64))
     company_name: Mapped[str] = mapped_column(String(255))
     funnel_name: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     manager: Mapped[User] = relationship()
+    comment_record: Mapped[Comment] = relationship(back_populates="contact", lazy="raise")
 
 
 class ContactReportState(Base):

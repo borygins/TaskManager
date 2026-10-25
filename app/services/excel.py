@@ -35,6 +35,7 @@ async def export_clients_to_workbook(session: AsyncSession, manager_id: int | No
     statement = select(Client).options(
         selectinload(Client.funnel_links).joinedload(ClientFunnel.funnel),
         selectinload(Client.assigned_manager),
+        selectinload(Client.comments),
     )
     if manager_id:
         statement = statement.where(Client.assigned_manager_id == manager_id)

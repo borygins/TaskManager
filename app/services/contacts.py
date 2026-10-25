@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from sqlalchemy import func, select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.models import Client, Comment, ContactActivity, ContactReportState, Funnel, User
 from app.services.task_service import append_daily_activity
@@ -94,7 +95,8 @@ async def record_contact(
         request_key=request_key, client_id=client.id, manager_id=actor.id,
         funnel_id=funnel.id, activity_date=data.activity_date, activity_type=data.activity_type,
         dialogue=data.result != "Недозвон", result=data.result, potential_turnover=data.potential_turnover,
-        next_activity_date=data.next_activity_date, comment=data.comment,
+        next_activity_date=data.next_activity_date,
+        comment_record=Comment(client_id=client.id, author_id=actor.id, body=data.comment, source="contact"),
         tax_number=client.tax_number, company_name=client.company_name or client.full_name,
         funnel_name=funnel.name,
     )
@@ -110,7 +112,6 @@ async def record_contact(
     client.last_manager_activity_date = max(
         client.last_manager_activity_date or data.activity_date, data.activity_date,
     )
-    session.add(Comment(client_id=client.id, author_id=actor.id, body=data.comment))
     await append_daily_activity(
         client.id, actor,
         [f"{data.activity_date:%d.%m.%Y} — {data.activity_type}: {data.result}. {data.comment}"], session,
@@ -132,7 +133,8 @@ async def list_contacts(session: AsyncSession, manager_id: int, start: date, end
         select(ContactActivity).where(
             ContactActivity.manager_id == manager_id,
             ContactActivity.activity_date >= start, ContactActivity.activity_date <= end,
-        ).order_by(ContactActivity.activity_date, ContactActivity.created_at, ContactActivity.id)
+        ).options(joinedload(ContactActivity.comment_record)).order_by(
+            ContactActivity.activity_date, ContactActivity.created_at, ContactActivity.id)
     )
     return list(result.scalars())
 
@@ -164,7 +166,7 @@ def aggregate_contacts(contacts: list[ContactActivity]) -> list[ContactRow]:
             potential=item.potential_turnover, channel=item.funnel_name, status=item.result,
             kind="Встреча" if item.activity_type == "Встреча" or (previous and previous.kind == "Встреча") else "Звонок",
             next_day=item.next_activity_date,
-            comment=f"{previous.comment} = {item.comment}" if previous else item.comment,
+            comment=f"{previous.comment} = {item.comment_record.body}" if previous else item.comment_record.body,
             qualified=bool(item.result != "Недозвон" or (previous and previous.qualified)),
         )
     return list(rows.values())

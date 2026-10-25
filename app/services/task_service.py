@@ -157,6 +157,7 @@ async def get_client_with_details(client_id: int, session: AsyncSession) -> Clie
             joinedload(Client.assigned_manager),
             selectinload(Client.funnel_links).joinedload(ClientFunnel.funnel),
             selectinload(Client.comments).joinedload(Comment.author),
+            selectinload(Client.comments).joinedload(Comment.contact),
         )
     )
     return result.scalar_one_or_none()
@@ -215,8 +216,9 @@ async def update_client_task(
 
     comment_body = form_data.get("comment_body", "").strip()
     if comment_body:
-        session.add(Comment(client_id=client.id, author_id=actor.id, body=comment_body))
-        changes.append(f"Комментарий к активности: {comment_body}")
+        comment = Comment(client_id=client.id, author_id=actor.id, body=comment_body, source="card")
+        session.add(comment)
+        changes.append(f"Комментарий из карточки: {comment_body}")
 
     manager_id_raw = form_data.get("assigned_manager_id")
     if actor.role == "boss" and manager_id_raw is not None:
@@ -296,7 +298,7 @@ def client_to_export_row(client: Client) -> dict[str, str]:
         "Организация": client.company_name,
         "ИНН": client.tax_number,
         "Телефон": client.phone,
-        "Комментарий менеджера": client.manager_notes,
+        "Комментарий менеджера": client.comments[-1].body if client.comments else "",
         "Дата звонка": client.last_call_date.isoformat() if client.last_call_date else "",
         "Следующая дата звонка": client.next_call_date.isoformat() if client.next_call_date else "",
         "Дата последней активности менеджера": (

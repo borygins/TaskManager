@@ -51,14 +51,7 @@
     </form>
 </section>
 <section class="panel">
-    <h2>История контактов клиента</h2>
-    <p class="muted">Последние 30 записей{% if current_user.role != 'boss' %} текущего менеджера{% endif %}.</p>
-    {% for item in history %}
-    <article class="activity-item">
-        <strong>{{ item.activity_date.strftime('%d.%m.%Y') }} · {{ item.activity_type }} · {{ item.result }}</strong>
-        <p class="activity-body">{{ item.comment }}</p>
-        <div class="muted">{{ item.manager.full_name }} · {{ item.funnel_name }} · Следующая дата: {{ item.next_activity_date.strftime('%d.%m.%Y') if item.next_activity_date else 'не назначена' }}</div>
-    </article>
-    {% else %}<div class="empty-state">Контактов ещё нет. Старый журнал изменений не преобразуется в звонки автоматически.</div>{% endfor %}
+    <h2>История клиента</h2>
+    {% include "_client_history.html" %}
 </section>
 {% endblock %}

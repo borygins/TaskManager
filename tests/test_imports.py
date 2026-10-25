@@ -91,7 +91,7 @@ class ImportTests(unittest.IsolatedAsyncioTestCase):
             client.status = "Переговоры"
             client.last_call_date = self.today
             client.phone = "+79000000000"
-            client.manager_notes = "Прежняя заметка"
+            session.add(Comment(client_id=client.id, author_id=self.manager.id, body="Прежняя заметка", source="card"))
             session.add(ClientFunnel(client_id=client.id, funnel_id=self.funnel.id))
             await session.commit()
         rows = [
@@ -122,21 +122,22 @@ class ImportTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(client.last_call_date, self.today)
             self.assertEqual(client.next_call_date, date(2026, 10, 28))
             self.assertEqual(client.assigned_manager_id, self.other.id)
-            self.assertEqual(client.manager_notes, "Прежняя заметка")
+            self.assertIsNotNone(await session.scalar(select(Comment.id).where(Comment.body == "Прежняя заметка")))
             names = list(await session.scalars(select(Funnel.name).join(ClientFunnel).where(ClientFunnel.client_id == client.id)))
             self.assertEqual(set(names), {"Спарк", "Новая"})
             new = await session.scalar(select(Client).where(Client.tax_number == "001111111111"))
             self.assertIsNone(new.assigned_manager_id)
             self.assertEqual(new.full_name, "Новый клиент")
             self.assertEqual(str(new.monthly_turnover), "123.45")
-            self.assertEqual(await session.scalar(select(func.count(Comment.id))), 2)
+            self.assertEqual(await session.scalar(select(func.count(Comment.id))), 3)
+            self.assertEqual(await session.scalar(select(func.count(Comment.id)).where(Comment.source == "import")), 2)
             self.assertEqual(await session.scalar(select(func.count(ContactActivity.id))), 0)
         repeat_id, repeat = await self.preview(rows)
         self.assertEqual(repeat["counts"]["unchanged"], 2)
         self.assertEqual(repeat["apply_count"], 0)
         await self.confirm(repeat_id)
         async with self.factory() as session:
-            self.assertEqual(await session.scalar(select(func.count(Comment.id))), 2)
+            self.assertEqual(await session.scalar(select(func.count(Comment.id))), 3)
 
     async def test_blank_cells_preserve_fields_and_equal_phone_does_not_update(self):
         async with self.factory() as session:

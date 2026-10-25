@@ -12,7 +12,6 @@ from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload
 
 from app.api.deps import get_current_user, get_manager_user
 from app.core.config import settings
@@ -20,6 +19,7 @@ from app.db.session import SessionLocal
 from app.models import Client, ContactActivity, ContactReportState, Funnel, User
 from app.services.contact_reports import REPORT_HEADERS, build_contact_workbook, generate_daily_report
 from app.services.contacts import CONTACT_RESULTS, aggregate_contacts, list_contacts, parse_contact, record_contact
+from app.services.task_service import get_client_with_details
 
 
 router = APIRouter()
@@ -81,16 +81,12 @@ async def report_manager(session, user: User, manager_id: int | None) -> User:
 
 async def form_response(request: Request, client_id: int, user: User, values=None, error=None, status_code=200):
     async with SessionLocal() as session:
-        client = await session.get(Client, client_id)
+        client = await get_client_with_details(client_id, session)
         if not client:
             raise HTTPException(404, "Клиент не найден.")
         if client.assigned_manager_id != user.id:
             raise HTTPException(403, "Нет доступа к клиенту.")
         funnels = list((await session.execute(select(Funnel).order_by(Funnel.name))).scalars())
-        query = select(ContactActivity).where(ContactActivity.client_id == client.id, ContactActivity.manager_id == user.id)
-        history = list((await session.execute(query.options(joinedload(ContactActivity.manager)).order_by(
-            ContactActivity.activity_date.desc(), ContactActivity.id.desc(),
-        ).limit(30))).scalars())
     if values is None:
         selected = request.query_params.get("funnel_id", "")
         if selected not in {str(f.id) for f in funnels}:
@@ -106,7 +102,7 @@ async def form_response(request: Request, client_id: int, user: User, values=Non
     }))
     return render(request, "contact_form.html", {
         "current_user": user, "client": client, "funnels": funnels,
-        "history": history, "values": values, "error": error,
+        "values": values, "error": error,
         "results": CONTACT_RESULTS, "today": date.today().isoformat(),
     }, status_code)
 

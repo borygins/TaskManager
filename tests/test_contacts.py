@@ -159,7 +159,7 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         async with self.factory() as session:
             other_client = await session.get(Client, self.other_client.id)
             other_client.phone = "PRIVATE_PHONE_SENTINEL"
-            other_client.manager_notes = "PRIVATE_NOTES_SENTINEL"
+            session.add(Comment(client_id=other_client.id, author_id=self.other.id, body="PRIVATE_NOTES_SENTINEL"))
             unassigned = Client(tax_number="001111111119", company_name="Без закрепления", full_name="Свободный клиент")
             session.add(unassigned)
             await session.commit()
@@ -806,6 +806,62 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         async with self.factory() as session:
             self.assertIsNotNone(await session.get(Client, self.client.id))
             self.assertEqual((await session.execute(select(func.count(ContactActivity.id)))).scalar(), 0)
+
+    async def test_unified_history_and_export_use_comments_without_counting_notes(self):
+        from app.services.task_service import update_client_task
+        from app.services.excel import export_clients_to_workbook
+
+        async with self.factory() as session:
+            client = await session.get(Client, self.client.id)
+            await update_client_task(client, {"comment_body": "Заметка из карточки"}, self.manager, session)
+            session.add(Comment(client_id=client.id, author_id=self.boss.id, body="Заметка из импорта", source="import"))
+            await session.commit()
+        self.assertEqual(await self.report_rows(), [])
+        await self.save(comment="Результат звонка")
+        async with self.factory() as session:
+            self.assertEqual(await session.scalar(select(func.count(Comment.id))), 3)
+            contacts = await list_contacts(session, self.manager.id, self.today, self.today)
+            self.assertEqual(contacts[0].comment_record.source, "contact")
+            self.assertEqual(contacts[0].comment_record.body, "Результат звонка")
+            self.assertEqual(contacts[0].comment_id, contacts[0].comment_record.id)
+            workbook = load_workbook(BytesIO(await export_clients_to_workbook(session)))
+            headers = [cell.value for cell in workbook.active[1]]
+            rows = [dict(zip(headers, row)) for row in workbook.active.iter_rows(min_row=2, values_only=True)]
+            self.assertEqual(next(r for r in rows if r["ИНН"] == self.client.tax_number)["Комментарий менеджера"], "Результат звонка")
+            workbook.close()
+        self.assertEqual((await self.report_rows())[0].comment, "Результат звонка")
+        # Both pages show the same notes and contact, including previous authors.
+        with patch("app.main.SessionLocal", self.factory):
+            for path in (f"/clients/{self.client.id}", f"/clients/{self.client.id}/contacts/new"):
+                status, _, body = await self.request("GET", path)
+                self.assertEqual(status, 200)
+                for value in ("Заметка из карточки", "Заметка из импорта", "Результат звонка", "Импорт Excel"):
+                    self.assertIn(value, body.decode())
+        async with self.factory() as session:
+            client = await session.get(Client, self.client.id)
+            client.assigned_manager_id = self.other.id
+            await session.commit()
+        self.active_user = self.other
+        status, _, body = await self.request("GET", f"/clients/{self.client.id}/contacts/new")
+        self.assertEqual(status, 200)
+        self.assertIn("Результат звонка", body.decode())
+        self.assertEqual(await self.report_rows(manager_id=self.other.id), [])
+
+    async def test_legacy_note_without_author_renders_and_startup_rejects_old_schema(self):
+        from sqlalchemy import text
+        from app.db.session import init_db
+
+        async with self.factory() as session:
+            session.add(Comment(client_id=self.client.id, author_id=None, body="Перенесено", source="legacy_notes"))
+            await session.commit()
+        status, _, body = await self.request("GET", f"/clients/{self.client.id}/contacts/new")
+        self.assertEqual(status, 200)
+        self.assertIn("Автор неизвестен", body.decode())
+        self.assertIn("исходные автор и дата неизвестны", body.decode())
+        async with self.engine.begin() as connection:
+            await connection.execute(text("ALTER TABLE clients ADD COLUMN manager_notes TEXT"))
+        with patch("app.db.session.engine", self.engine), self.assertRaisesRegex(RuntimeError, "migrate_comments.py"):
+            await init_db()
 
 
 if __name__ == "__main__":

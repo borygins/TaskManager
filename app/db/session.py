@@ -44,6 +44,20 @@ async def init_db() -> None:
     from app.models import entities  # noqa: F401
 
     async with engine.begin() as connection:
+        # create_all cannot migrate existing columns. Never silently start the new
+        # model on an old database or run the destructive migration at startup.
+        old_clients = {row[1] for row in (await connection.execute(text("PRAGMA table_info(clients)"))).fetchall()}
+        old_comments = (await connection.execute(text("PRAGMA table_info(comments)"))).fetchall()
+        old_contacts = {row[1] for row in (await connection.execute(text("PRAGMA table_info(contact_activities)"))).fetchall()}
+        if ("manager_notes" in old_clients
+                or (old_comments and ("source" not in {row[1] for row in old_comments}
+                                      or any(row[1] == "author_id" and row[3] for row in old_comments)))
+                or (old_contacts and ("comment" in old_contacts or "comment_id" not in old_contacts))):
+            raise RuntimeError(
+                "Требуется миграция комментариев. Остановите приложение и выполните "
+                "python scripts/migrate_comments.py --database task_manager.sqlite3 "
+                "(или укажите путь к своей базе). Инструкция: docs/COMMENTS_MIGRATION.md"
+            )
         await connection.run_sync(Base.metadata.create_all)
 
         client_columns = {row[1] for row in (await connection.execute(text("PRAGMA table_info(clients)"))).fetchall()}
