@@ -329,8 +329,43 @@ button:hover,
     margin-bottom: 18px;
 }
 
+.contact-filter-groups {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+    gap: 18px;
+    align-items: stretch;
+}
+
+.contact-filter-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.date-filter-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 18px;
+}
+
+.date-submit-button {
+    min-width: 160px;
+}
+
+.day-navigation {
+    justify-content: flex-end;
+}
+
 .filter-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
     align-items: end;
 }
@@ -480,6 +515,10 @@ textarea {
 }
 
 @media (max-width: 1200px) {
+    .contact-filter-groups {
+        grid-template-columns: 1fr;
+    }
+
     .client-card > .form-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -518,6 +557,23 @@ textarea {
 }
 
 @media (max-width: 640px) {
+    .date-filter-footer {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .date-submit-button {
+        width: 100%;
+    }
+
+    .day-navigation {
+        justify-content: stretch;
+    }
+
+    .contact-filter-card .filter-actions > * {
+        flex: 1 1 auto;
+    }
+
     .client-card > .form-grid {
         grid-template-columns: 1fr;
     }

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import calendar
 import secrets
-from datetime import date
+from datetime import date, timedelta
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -172,6 +172,8 @@ async def contacts_page(request: Request, day: str | None = None, q: str = "", u
         report_state = await session.get(ContactReportState, (user.id, selected_day))
     return render(request, "contacts.html", {
         "current_user": user, "day": selected_day, "today": date.today(), "q": q,
+        "previous_day": selected_day - timedelta(days=1),
+        "next_day": selected_day + timedelta(days=1),
         "rows": rows, "due": due, "overdue": overdue, "found": found, "unscheduled": unscheduled,
         "completed": sum(row.qualified for row in rows), "headers": REPORT_HEADERS,
         "report_state": report_state,

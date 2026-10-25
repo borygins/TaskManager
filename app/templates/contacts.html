@@ -42,11 +42,25 @@
 </section>
 {% elif report_state %}<p class="muted">Дневной Excel обновлён {{ report_state.generated_at.strftime('%d.%m.%Y %H:%M') if report_state.generated_at else '' }}. Файл доступен в папке reports приложения.</p>{% endif %}
 <section class="panel">
-    <form method="get" class="filter-grid">
-        <label><span>Дата плана и отчёта</span><input type="date" name="day" value="{{ day.isoformat() }}" required></label>
-        <label><span>Найти своего клиента</span><input type="search" name="q" value="{{ q }}" placeholder="ИНН, ФИО или организация"></label>
-        <div class="filter-actions"><button type="submit">Показать</button><a class="secondary-link" href="/contacts">Сегодня</a></div>
-    </form>
+    <div class="contact-filter-groups">
+        <form method="get" class="contact-filter-card" data-date-filter>
+            {% if q.strip() %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+            <label><span>Дата плана и отчёта</span><input type="date" name="day" value="{{ day.isoformat() }}" required></label>
+            <div class="date-filter-footer">
+                <button type="submit" class="date-submit-button" data-date-submit>Выбрать дату</button>
+                <div class="filter-actions day-navigation" data-day-navigation>
+                    <a class="secondary-link" href="/contacts?day={{ previous_day.isoformat() }}{% if q.strip() %}&amp;q={{ q|urlencode }}{% endif %}" aria-label="Предыдущий день">← День</a>
+                    <a class="secondary-link" href="/contacts?day={{ today.isoformat() }}{% if q.strip() %}&amp;q={{ q|urlencode }}{% endif %}">Сегодня</a>
+                    <a class="secondary-link" href="/contacts?day={{ next_day.isoformat() }}{% if q.strip() %}&amp;q={{ q|urlencode }}{% endif %}" aria-label="Следующий день">День →</a>
+                </div>
+            </div>
+        </form>
+        <form method="get" class="contact-filter-card" data-client-search>
+            <input type="hidden" name="day" value="{{ day.isoformat() }}">
+            <label><span>Найти своего клиента</span><input type="search" name="q" value="{{ q }}" placeholder="ИНН, ФИО или организация"></label>
+            <div class="filter-actions"><button type="submit">Найти</button></div>
+        </form>
+    </div>
     <p class="muted">План показывает текущие назначения. Нажмите на строку клиента, чтобы открыть карточку. История выполненных контактов за выбранную дату — ниже.</p>
     {% if q.strip() %}<h2>Результаты поиска</h2><p class="muted">До 100 клиентов. Для более точного поиска уточните запрос.</p>{{ client_list(found) }}{% endif %}
 </section>

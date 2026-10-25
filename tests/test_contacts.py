@@ -12,7 +12,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from openpyxl import load_workbook
 from sqlalchemy import event, func, select
@@ -396,6 +396,38 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(self.client.tax_number, section)
             self.assertNotIn(self.second_client.tax_number, section)
             self.assertIn("Без следующей даты · 1", section)
+
+    async def test_day_navigation_crosses_year_boundary_and_preserves_search(self):
+        selected = date(2027, 1, 1)
+        query = "ООО Ромашка"
+        status, _, body = await self.request(
+            "GET", "/contacts?" + urlencode({"day": selected.isoformat(), "q": query}),
+        )
+        self.assertEqual(status, 200)
+        text = body.decode()
+        self.assertIn("data-date-filter", text)
+        self.assertIn("data-client-search", text)
+        self.assertIn("data-date-submit", text)
+        self.assertIn("data-day-navigation", text)
+        self.assertIn(">Показать дату</button>", text)
+        self.assertIn(">Найти</button>", text)
+        self.assertIn(f'name="day" value="{selected.isoformat()}"', text)
+
+        def navigation_query(label: str) -> dict[str, list[str]]:
+            href = re.search(
+                rf'href="([^"]+)" aria-label="{label}"', text,
+            ).group(1)
+            return parse_qs(urlsplit(html.unescape(href)).query)
+
+        self.assertEqual(navigation_query("Предыдущий день"), {
+            "day": ["2026-12-31"], "q": [query],
+        })
+        self.assertEqual(navigation_query("Следующий день"), {
+            "day": ["2027-01-02"], "q": [query],
+        })
+        self.assertIn(
+            f'href="/contacts?day={self.today.isoformat()}&amp;q=', text,
+        )
 
     async def test_contact_without_next_date_remains_visible_and_card_can_schedule_it(self):
         await self.save(next_activity_date="")
