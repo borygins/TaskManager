@@ -99,8 +99,12 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
     async def new_form(self, client_id=None, **changes):
         client_id = client_id or self.client.id
-        expected_client = next(client for client in (self.client, self.second_client, self.other_client)
-                               if client.id == client_id)
+        expected_client = next((client for client in (self.client, self.second_client, self.other_client)
+                                if client.id == client_id), None)
+        if expected_client is None:
+            async with self.factory() as session:
+                expected_client = await session.get(Client, client_id)
+        self.assertIsNotNone(expected_client)
         status, _, body = await self.request("GET", f"/clients/{client_id}/contacts/new")
         self.assertEqual(status, 200)
         text = body.decode()
@@ -437,7 +441,7 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(client.company_name, fields["company_name"])
             self.assertEqual(client.full_name, fields["full_name"])
             self.assertEqual(client.phone, fields["phone"])
-            self.assertEqual(client.status, "Поиск контакта")
+            self.assertEqual(client.status, "Новый")
             links = list((await session.execute(select(ClientFunnel).where(ClientFunnel.client_id == client.id))).scalars())
             self.assertEqual([link.funnel_id for link in links], [self.funnel.id])
             self.assertEqual(headers["location"], f"/clients/{client.id}?funnel_id={self.funnel.id}&created=1")
@@ -593,14 +597,14 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         await self.save(result="Недозвон", next_activity_date=tomorrow, comment="Не ответил")
         self.assertFalse((await self.report_rows())[0].qualified)
         await self.save(result="Перенос на дату", next_activity_date=tomorrow, comment="Обсудили условия", potential_turnover="300000")
-        await self.save(activity_type="Встреча", result="Договор подписан", comment="Подписали договор", potential_turnover="500000")
+        await self.save(activity_type="Встреча", result="Подписан", comment="Подписали договор", potential_turnover="500000")
         await self.save(result="Недозвон", next_activity_date=tomorrow, comment="Не ответил повторно", potential_turnover="450000")
         rows = await self.report_rows()
         self.assertEqual(len(rows), 1)
         row = rows[0]
         self.assertTrue(row.qualified)
         self.assertEqual(row.kind, "Встреча")
-        self.assertEqual(row.status, "Недозвон")
+        self.assertEqual(row.status, "Подписан")
         self.assertEqual(row.potential, Decimal("450000"))
         self.assertEqual(row.channel, self.funnel.name)
         self.assertEqual(row.next_day, self.today + timedelta(days=1))

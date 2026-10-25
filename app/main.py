@@ -18,6 +18,7 @@ from app.api.contacts import router as contacts_router
 from app.api.clients import router as clients_router
 from app.api.imports import router as imports_router
 from app.core.config import settings
+from app.core.sales import CLIENT_STATUSES
 from app.core.security import hash_password, normalize_employee_id
 from app.db.session import SessionLocal, init_db
 from app.models import Client, User
@@ -83,7 +84,7 @@ app.include_router(clients_router)
 def render(request: Request, template_name: str, context: dict) -> HTMLResponse:
     base_context = {
         "request": request,
-        "statuses": settings.default_statuses,
+        "statuses": CLIENT_STATUSES,
         **context,
     }
     return templates.TemplateResponse(template_name, base_context)
@@ -524,7 +525,10 @@ async def save_client(
             raise HTTPException(status_code=404, detail="Клиент не найден.")
         if user.role != "boss" and client.assigned_manager_id != user.id:
             raise HTTPException(status_code=403, detail="Нет доступа к клиенту.")
-        await update_client_task(client=client, form_data=dict(form), actor=user, session=session)
+        try:
+            await update_client_task(client=client, form_data=dict(form), actor=user, session=session)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         await session.commit()
 
     funnel_id_raw = str(form.get("funnel_id", "")).strip()

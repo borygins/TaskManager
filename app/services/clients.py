@@ -7,6 +7,7 @@ from datetime import date
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.sales import CLIENT_STATUSES
 from app.models import Client, ClientFunnel, Funnel, User
 from app.services.task_service import append_daily_activity
 
@@ -59,7 +60,7 @@ async def create_client(session: AsyncSession, actor: User, data: NewClientInput
     client = Client(
         tax_number=data.tax_number, company_name=data.company_name, full_name=data.full_name,
         phone=data.phone, assigned_manager_id=actor.id if actor.role == "manager" else None,
-        status="Поиск контакта",
+        status=CLIENT_STATUSES[0],
         last_manager_activity_date=date.today(),
     )
     session.add(client)

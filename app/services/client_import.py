@@ -16,15 +16,14 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.config import settings
+from app.core.sales import CLIENT_STATUSES, CLIENT_STATUS_SET
 from app.core.security import normalize_employee_id
 from app.models import Client, ClientFunnel, Comment, Funnel, User
-from app.services.contacts import CONTACT_RESULTS
 from app.services.task_service import append_daily_activity
 
 MAX_FILE_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 5000
-IMPORT_POLICY_VERSION = 4
+IMPORT_POLICY_VERSION = 5
 FIELDS = {
     "ФИО": "full_name", "Организация": "company_name", "Телефон": "phone",
     "Дата звонка": "last_call_date", "Следующая дата звонка": "next_call_date",
@@ -229,7 +228,7 @@ async def build_plan(session: AsyncSession, source: dict) -> dict:
         if not client and not (incoming.get("company_name") or incoming.get("full_name")):
             row["error"] = "Для нового клиента укажите организацию или ФИО."
             continue
-        if "status" in incoming and incoming["status"] not in set(settings.default_statuses) | set(CONTACT_RESULTS) | ({client.status} if client else set()):
+        if "status" in incoming and incoming["status"] not in CLIENT_STATUS_SET:
             row["error"] = "Неизвестный статус клиента."
             continue
         current = {field: scalar_text(getattr(client, field)) for field in FIELDS.values()} if client else {}
@@ -244,7 +243,7 @@ async def build_plan(session: AsyncSession, source: dict) -> dict:
         })
         if not client:
             incoming.setdefault("full_name", incoming.get("company_name", ""))
-            incoming.setdefault("status", "Поиск контакта")
+            incoming.setdefault("status", CLIENT_STATUSES[0])
         for field in FIELDS.values():
             if field not in incoming:
                 continue

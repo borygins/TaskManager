@@ -9,19 +9,19 @@ from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from app.core.sales import (
+    CALL_BACK_MARK,
+    CLIENT_STATUSES,
+    CLIENT_STATUS_SET,
+    MISSED_CALL_MARK,
+)
 from app.models import Client, ClientFunnel, Comment, ContactActivity, ContactReportState, Funnel, User
 from app.services.task_service import append_daily_activity
 
 
-CONTACT_RESULTS = (
-    "Недозвон", "Перенос на дату", "Поиск контакта", "Отказ", "Переговоры",
-    "Согласие", "Мискодинг", "Договор подписан", "Договор запущен",
-)
-STAGE_BY_RESULT = {
-    "Поиск контакта": "Поиск контакта", "Отказ": "Отказ", "Переговоры": "Переговоры",
-    "Согласие": "Согласие", "Мискодинг": "Мискодинг",
-    "Договор подписан": "Подписан", "Договор запущен": "Подписан",
-}
+# Temporary input choices until the simplified activity form is introduced.
+# The client stages themselves come from the single canonical catalogue.
+CONTACT_RESULTS = ("Недозвон", "Перенос на дату", *CLIENT_STATUSES)
 
 
 @dataclass(frozen=True)
@@ -94,10 +94,17 @@ async def record_contact(
     latest_day = (await session.execute(
         select(func.max(ContactActivity.activity_date)).where(ContactActivity.client_id == client.id)
     )).scalar_one()
+    client_status = data.result if data.result in CLIENT_STATUS_SET else client.status
+    marks = []
+    if data.result == "Недозвон":
+        marks.append(MISSED_CALL_MARK)
+    elif data.result == "Перенос на дату":
+        marks.append(CALL_BACK_MARK)
     contact = ContactActivity(
         request_key=request_key, client_id=client.id, manager_id=actor.id,
         funnel_id=funnel.id if funnel else None, activity_date=data.activity_date, activity_type=data.activity_type,
-        dialogue=data.result != "Недозвон", result=data.result, potential_turnover=data.potential_turnover,
+        dialogue=data.result != "Недозвон", result=data.result, client_status=client_status, marks=marks,
+        potential_turnover=data.potential_turnover,
         next_activity_date=data.next_activity_date,
         comment_record=Comment(client_id=client.id, author_id=actor.id, body=data.comment, source="contact"),
         tax_number=client.tax_number, company_name=client.company_name or client.full_name,
@@ -108,8 +115,8 @@ async def record_contact(
     # A historical entry must not replace a newer plan or sales stage.
     if latest_day is None or data.activity_date >= latest_day:
         client.next_call_date = data.next_activity_date
-        if data.result in STAGE_BY_RESULT:
-            client.status = STAGE_BY_RESULT[data.result]
+        if data.result in CLIENT_STATUS_SET:
+            client.status = data.result
     if data.activity_type == "Звонок":
         client.last_call_date = max(client.last_call_date or data.activity_date, data.activity_date)
     client.last_manager_activity_date = max(
@@ -166,10 +173,10 @@ def aggregate_contacts(contacts: list[ContactActivity]) -> list[ContactRow]:
         rows[key] = ContactRow(
             client_id=item.client_id, manager_id=item.manager_id, day=item.activity_date,
             tax_number=item.tax_number, company_name=item.company_name,
-            potential=item.potential_turnover, channel=item.funnel_name, status=item.result,
+            potential=item.potential_turnover, channel=item.funnel_name, status=item.client_status,
             kind="Встреча" if item.activity_type == "Встреча" or (previous and previous.kind == "Встреча") else "Звонок",
             next_day=item.next_activity_date,
             comment=f"{previous.comment} = {item.comment_record.body}" if previous else item.comment_record.body,
-            qualified=bool(item.result != "Недозвон" or (previous and previous.qualified)),
+            qualified=bool(MISSED_CALL_MARK not in item.marks or (previous and previous.qualified)),
         )
     return list(rows.values())

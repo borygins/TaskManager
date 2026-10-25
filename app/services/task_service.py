@@ -7,6 +7,7 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
+from app.core.sales import CLIENT_STATUS_SET
 from app.models import ActivityLog, Client, ClientFunnel, Comment, Funnel, User
 
 
@@ -187,6 +188,9 @@ async def update_client_task(
     actor: User,
     session: AsyncSession,
 ) -> None:
+    submitted_status = form_data.get("status")
+    if submitted_status is not None and submitted_status.strip() not in CLIENT_STATUS_SET:
+        raise ValueError("Выберите статус клиента из списка.")
     tracked_fields = [
         ("status", "status", "Статус", lambda value: value.strip()),
         ("phone", "phone", "Телефон", lambda value: value.strip()),

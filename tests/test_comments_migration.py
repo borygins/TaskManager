@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from scripts.migrate_comments import VERSION, columns, migrate
+from scripts.migrate_statuses import migrate as migrate_statuses
 
 
 class CommentsMigrationTests(unittest.TestCase):
@@ -23,8 +24,11 @@ class CommentsMigrationTests(unittest.TestCase):
                 CREATE TABLE funnels (id INTEGER PRIMARY KEY);
                 INSERT INTO users VALUES (1);
                 INSERT INTO funnels VALUES (1);
-                CREATE TABLE clients (id INTEGER PRIMARY KEY, manager_notes TEXT NOT NULL);
-                INSERT INTO clients VALUES (1, 'Старая заметка'), (2, 'Уже есть');
+                CREATE TABLE clients (
+                    id INTEGER PRIMARY KEY, manager_notes TEXT NOT NULL,
+                    status VARCHAR(64) NOT NULL DEFAULT 'Поиск контакта'
+                );
+                INSERT INTO clients (id,manager_notes) VALUES (1, 'Старая заметка'), (2, 'Уже есть');
                 CREATE TABLE comments (
                     id INTEGER NOT NULL PRIMARY KEY,
                     client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
@@ -158,6 +162,7 @@ class CommentsMigrationTests(unittest.TestCase):
         from app.models import Comment, ContactActivity
 
         migrate(self.path)
+        migrate_statuses(self.path)
         engine = create_engine(f"sqlite:///{self.path.as_posix()}")
         try:
             with Session(engine) as session:

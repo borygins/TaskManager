@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.sales import CLIENT_STATUSES
 from app.db.session import Base
 
 
@@ -62,7 +63,7 @@ class Client(Base):
     last_call_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     next_call_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     last_manager_activity_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    status: Mapped[str] = mapped_column(String(64), default="Поиск контакта")
+    status: Mapped[str] = mapped_column(String(64), default=CLIENT_STATUSES[0])
     monthly_turnover: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     mcc_code: Mapped[str] = mapped_column(String(32), default="")
     competitor_bank: Mapped[str] = mapped_column(String(255), default="")
@@ -146,7 +147,10 @@ class ContactActivity(Base):
     activity_type: Mapped[str] = mapped_column(String(32))
     # Kept for existing databases; derived from result on write, not used for counting.
     dialogue: Mapped[bool] = mapped_column(Boolean)
+    # `result` remains during the transition to the simplified activity form.
     result: Mapped[str] = mapped_column(String(64))
+    client_status: Mapped[str] = mapped_column(String(64), default=CLIENT_STATUSES[0])
+    marks: Mapped[list[str]] = mapped_column(JSON, default=list)
     potential_turnover: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     next_activity_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     comment_id: Mapped[int] = mapped_column(ForeignKey("comments.id"), unique=True)

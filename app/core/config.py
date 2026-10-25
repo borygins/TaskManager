@@ -39,14 +39,6 @@ class Settings:
     upload_dir: Path = BASE_DIR / "app" / "static" / "uploads"
     templates_dir: Path = BASE_DIR / "app" / "templates"
     static_dir: Path = BASE_DIR / "app" / "static"
-    default_statuses: tuple[str, ...] = (
-        "Поиск контакта",
-        "Отказ",
-        "Переговоры",
-        "Согласие",
-        "Мискодинг",
-        "Подписан",
-    )
     funnel_names: tuple[str, ...] = ("Доля рынка", "Спарк")
     backup_hour: int = 2
     host: str = "0.0.0.0"

@@ -60,6 +60,12 @@ async def init_db() -> None:
                 "python scripts/migrate_comments.py --database task_manager.sqlite3 "
                 "(или укажите путь к своей базе). Инструкция: docs/COMMENTS_MIGRATION.md"
             )
+        if old_contacts and ({"client_status", "marks"} - old_contacts):
+            raise RuntimeError(
+                "Требуется миграция статусов. Остановите приложение и выполните "
+                "python scripts/migrate_statuses.py --database task_manager.sqlite3 "
+                "(или укажите путь к своей базе). Инструкция: docs/STATUS_MIGRATION.md"
+            )
         await connection.run_sync(Base.metadata.create_all)
 
         client_columns = {row[1] for row in (await connection.execute(text("PRAGMA table_info(clients)"))).fetchall()}
