@@ -336,6 +336,55 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
             for model in (ContactActivity, ContactReportState):
                 self.assertEqual(await session.scalar(select(func.count()).select_from(model)), 0)
 
+    async def test_only_boss_can_create_funnel_and_duplicate_name_is_rejected(self):
+        with patch("app.main.SessionLocal", self.factory):
+            self.active_user = self.manager
+            status, _, body = await self.request("GET", "/dashboard")
+            self.assertEqual(status, 200)
+            self.assertNotIn('href="/boss/funnels/new"', body.decode())
+            for method, path, form in (
+                ("GET", "/boss/funnels/new", None),
+                ("POST", "/boss/funnels", {"name": "Запрещённая воронка"}),
+            ):
+                status, _, _ = await self.request(method, path, form)
+                self.assertEqual(status, 403)
+
+            self.active_user = self.boss
+            status, _, body = await self.request("GET", "/dashboard")
+            self.assertEqual(status, 200)
+            self.assertIn('href="/boss/funnels/new">Добавить воронку</a>', body.decode())
+            status, _, body = await self.request("GET", "/boss/funnels/new")
+            self.assertEqual(status, 200)
+            text = body.decode()
+            csrf = html.unescape(re.search(r'name="csrf_token" value="([^"]+)"', text).group(1))
+
+            status, _, _ = await self.request("POST", "/boss/funnels", {
+                "csrf_token": "wrong", "name": "Новая воронка",
+            })
+            self.assertEqual(status, 403)
+            status, _, body = await self.request("POST", "/boss/funnels", {
+                "csrf_token": csrf, "name": "   ",
+            })
+            self.assertEqual(status, 400)
+            self.assertIn("Название воронки обязательно", body.decode())
+            status, _, body = await self.request("POST", "/boss/funnels", {
+                "csrf_token": csrf, "name": "  доля   РЫНКА  ",
+            })
+            self.assertEqual(status, 409)
+            self.assertIn("Воронка с таким названием уже существует", body.decode())
+
+            status, headers, _ = await self.request("POST", "/boss/funnels", {
+                "csrf_token": csrf, "name": "  Новая   воронка  ", "description": "Описание",
+            })
+            self.assertEqual(status, 303)
+            self.assertEqual(headers["location"], "/dashboard?funnel_created=1")
+
+        async with self.factory() as session:
+            funnel = await session.scalar(select(Funnel).where(Funnel.name == "Новая воронка"))
+            self.assertIsNotNone(funnel)
+            self.assertEqual(funnel.description, "Описание")
+            self.assertEqual(await session.scalar(select(func.count(Funnel.id))), 3)
+
     async def test_service_rejects_contact_created_by_boss(self):
         from app.services.contacts import parse_contact, record_contact
         data = parse_contact(await self.new_form())

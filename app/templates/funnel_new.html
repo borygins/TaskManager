@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+    <div class="badge">Воронки</div>
+    <h1>Добавить воронку</h1>
+    <p class="muted">Новая воронка станет доступна всем пользователям. Создавать воронки может только руководитель.</p>
+</section>
+
+<section class="panel">
+    {% if error %}<div class="error-box" role="alert">{{ error }}</div>{% endif %}
+    <form method="post" action="/boss/funnels" class="stack-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label>
+            <span>Название</span>
+            <input type="text" name="name" value="{{ values.name }}" maxlength="255" required autofocus>
+        </label>
+        <label>
+            <span>Описание</span>
+            <textarea name="description" maxlength="500" placeholder="Необязательно">{{ values.description }}</textarea>
+        </label>
+        <div class="actions contact-actions">
+            <button type="submit">Создать воронку</button>
+            <a class="secondary-link" href="/dashboard">Отмена</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

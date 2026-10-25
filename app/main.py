@@ -11,10 +11,11 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.deps import get_boss_user, get_current_user
-from app.api.contacts import router as contacts_router
+from app.api.contacts import check_csrf, csrf_token, router as contacts_router
 from app.api.clients import router as clients_router
 from app.api.imports import router as imports_router
 from app.core.config import settings
@@ -26,6 +27,7 @@ from app.services.auth import authenticate_user
 from app.services.backup import create_backup
 from app.services.contact_reports import retry_pending_reports
 from app.services.excel import build_import_template, export_clients_to_workbook
+from app.services.funnels import FunnelAlreadyExists, create_funnel
 from app.services.seed import seed_defaults
 from app.services.task_service import (
     bulk_assign_clients,
@@ -81,13 +83,13 @@ app.include_router(contacts_router)
 app.include_router(clients_router)
 
 
-def render(request: Request, template_name: str, context: dict) -> HTMLResponse:
+def render(request: Request, template_name: str, context: dict, status_code: int = 200) -> HTMLResponse:
     base_context = {
         "request": request,
         "statuses": CLIENT_STATUSES,
         **context,
     }
-    return templates.TemplateResponse(template_name, base_context)
+    return templates.TemplateResponse(template_name, base_context, status_code=status_code)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -191,6 +193,54 @@ async def dashboard(
             "activities": activities[:12],
         },
     )
+
+
+async def funnel_form_response(
+    request: Request,
+    current_user: User,
+    values: dict[str, str] | None = None,
+    error: str | None = None,
+    status_code: int = 200,
+) -> HTMLResponse:
+    async with SessionLocal() as session:
+        user = await session.get(User, current_user.id)
+    return render(request, "funnel_new.html", {
+        "current_user": user,
+        "csrf_token": csrf_token(request),
+        "values": values or {"name": "", "description": ""},
+        "error": error,
+    }, status_code=status_code)
+
+
+@app.get("/boss/funnels/new", response_class=HTMLResponse)
+async def new_funnel_page(
+    request: Request,
+    current_user: User = Depends(get_boss_user),
+) -> HTMLResponse:
+    return await funnel_form_response(request, current_user)
+
+
+@app.post("/boss/funnels")
+async def new_funnel_action(
+    request: Request,
+    current_user: User = Depends(get_boss_user),
+) -> Response:
+    form = {key: str(value) for key, value in (await request.form()).items()}
+    check_csrf(request, form)
+    values = {"name": form.get("name", ""), "description": form.get("description", "")}
+    try:
+        async with SessionLocal() as session:
+            await create_funnel(session, values["name"], values["description"])
+            await session.commit()
+    except FunnelAlreadyExists as exc:
+        return await funnel_form_response(request, current_user, values, str(exc), 409)
+    except ValueError as exc:
+        return await funnel_form_response(request, current_user, values, str(exc), 400)
+    except IntegrityError:
+        return await funnel_form_response(
+            request, current_user, values, "Воронка с таким названием уже существует.", 409,
+        )
+    return RedirectResponse("/dashboard?funnel_created=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/boss/users", response_class=HTMLResponse)
