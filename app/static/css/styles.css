@@ -56,6 +56,12 @@ a {
 }
 
 .sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 28px;
     border-right: 1px solid var(--line);
     background: rgba(4, 9, 18, 0.74);
@@ -490,6 +496,9 @@ textarea {
     }
 
     .sidebar {
+        position: static;
+        height: auto;
+        overflow-y: visible;
         border-right: 0;
         border-bottom: 1px solid var(--line);
     }
