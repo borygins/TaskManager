@@ -73,6 +73,21 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         update();
     });
+    document.querySelectorAll("[data-grouped-number]").forEach((input) => {
+        const formatValue = () => {
+            const compact = input.value.replace(/\s+/g, "");
+            const parts = compact.match(/^(\d+)([.,]\d*)?$/);
+            if (!parts) return;
+            const groupedInteger = parts[1].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+            const fraction = parts[2] && !/^[.,]0*$/.test(parts[2]) ? parts[2] : "";
+            input.value = `${groupedInteger}${fraction}`;
+        };
+        formatValue();
+        input.addEventListener("blur", formatValue);
+        input.form?.addEventListener("submit", () => {
+            input.value = input.value.replace(/\s+/g, "");
+        });
+    });
     const cards = document.querySelectorAll(".client-card, .panel, .funnel-card, .stat-card");
     cards.forEach((card, index) => {
         card.animate(

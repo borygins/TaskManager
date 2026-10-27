@@ -13,6 +13,13 @@
 [hidden] { display: none !important; }
 .content { min-width: 0; }
 .contact-actions { flex-wrap: wrap; justify-content: flex-start; }
+.client-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: nowrap;
+    margin-top: 16px;
+}
 .contact-progress { width: min(420px, 100%); accent-color: var(--accent-2); height: 18px; }
 .contact-table-scroll { overflow-x: auto; }
 .contact-table { width: 100%; min-width: 1100px; border-collapse: collapse; font-size: 0.9rem; }

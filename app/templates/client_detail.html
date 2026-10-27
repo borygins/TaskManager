@@ -28,7 +28,7 @@
                 <span class="tag">{{ client.assigned_manager.full_name if client.assigned_manager else 'Не назначен' }}</span>
             </div>
         </div>
-        <div class="actions contact-actions">
+        <div class="client-header-actions">
             {% if client.profile_url %}<a class="secondary-link" href="{{ client.profile_url }}" target="_blank" rel="noopener noreferrer">Перейти в профиль</a>{% endif %}
             {% if current_user.role == 'manager' %}<a class="secondary-link" href="/clients/{{ client.id }}/contacts/new">Активность</a>{% endif %}
         </div>
@@ -55,32 +55,24 @@
 
     <div class="form-grid">
         <label>
-            <span>ЛПР</span>
-            <input type="text" name="full_name" maxlength="255" value="{{ client.full_name or '' }}">
+            <span>Организация</span>
+            <input type="text" name="company_name" value="{{ client.company_name or '' }}">
         </label>
         <label>
-            <span>Ссылка на профиль</span>
-            <input type="url" name="profile_url" maxlength="2048" value="{{ client.profile_url or '' }}" placeholder="https://...">
+            <span>ЛПР</span>
+            <input type="text" name="full_name" maxlength="255" value="{{ client.full_name or '' }}">
         </label>
         <label>
             <span>Телефон</span>
             <input type="text" name="phone" value="{{ client.phone or '' }}">
         </label>
         <label>
-            <span>Дата звонка</span>
-            <input type="date" name="last_call_date" value="{{ client.last_call_date.isoformat() if client.last_call_date else '' }}">
-        </label>
-        <label>
             <span>Следующая дата активности</span>
             <input type="date" name="next_call_date" value="{{ client.next_call_date.isoformat() if client.next_call_date else '' }}">
         </label>
         <label>
-            <span>Организация</span>
-            <input type="text" name="company_name" value="{{ client.company_name or '' }}">
-        </label>
-        <label>
             <span>Потенциал оборота в месяц</span>
-            <input type="text" name="monthly_turnover" value="{{ client.monthly_turnover or '' }}">
+            <input type="text" name="monthly_turnover" value="{{ client.monthly_turnover or '' }}" inputmode="decimal" data-grouped-number>
         </label>
         <label>
             <span>MCC</span>
@@ -89,10 +81,6 @@
         <label>
             <span>Банк конкурент</span>
             <input type="text" name="competitor_bank" value="{{ client.competitor_bank or '' }}">
-        </label>
-        <label class="wide">
-            <span>Адрес регистрации</span>
-            <input type="text" name="registration_address" value="{{ client.registration_address or '' }}">
         </label>
         {% if current_user.role == 'boss' %}
         <label>
@@ -108,6 +96,10 @@
             </select>
         </label>
         {% endif %}
+        <label>
+            <span>Ссылка на профиль</span>
+            <input type="url" name="profile_url" maxlength="2048" value="{{ client.profile_url or '' }}" placeholder="https://...">
+        </label>
     </div>
 
     <label class="wide">

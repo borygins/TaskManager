@@ -162,6 +162,20 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(f'name="full_name" maxlength="255" value="{self.client.full_name}"', text)
                 self.assertIn('name="profile_url" maxlength="2048" value="https://profile.example/clients/1"', text)
                 self.assertIn('href="https://profile.example/clients/1" target="_blank" rel="noopener noreferrer">Перейти в профиль</a>', text)
+                self.assertNotIn('name="last_call_date"', text)
+                self.assertNotIn('name="registration_address"', text)
+                field_order = [
+                    'name="company_name"',
+                    'name="full_name"',
+                    'name="phone"',
+                    'name="next_call_date"',
+                    'name="monthly_turnover"',
+                    'name="mcc_code"',
+                    'name="competitor_bank"',
+                    'name="profile_url"',
+                ]
+                self.assertEqual([text.index(field) for field in field_order], sorted(text.index(field) for field in field_order))
+                self.assertIn('name="monthly_turnover" value="" inputmode="decimal" data-grouped-number', text)
                 self.assertNotIn('name="status"', text)
                 self.assertIn("Потенциал оборота в месяц", text)
                 self.assertNotIn("Обороты в месяц", text)
