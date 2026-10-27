@@ -1,0 +1,41 @@
+{% macro client_list(clients, empty_message='Клиентов нет.', funnel_id=None, search_query='', selected_status='', selected_next_call_date='') %}
+{% if clients %}
+<div class="client-row-list">
+    <div class="row-list-head row-list-grid">
+        <div class="row-eye-cell row-eye-heading">Карточка</div>
+        <div>ИНН</div>
+        <div>Организация</div>
+        <div>Статус</div>
+        <div>Последний комментарий</div>
+        <div>Воронка продаж</div>
+        <div class="row-date-cell">Следующая дата звонка</div>
+    </div>
+    <div class="row-list-body">
+        {% for client in clients %}
+        <div class="row-item row-list-grid">
+            <div class="row-eye-cell">
+                <a
+                    class="eye-link"
+                    href="/clients/{{ client.id }}{% if funnel_id %}?funnel_id={{ funnel_id }}&amp;q={{ search_query|urlencode }}&amp;status_filter={{ selected_status|urlencode }}&amp;next_call_date_filter={{ selected_next_call_date|urlencode }}{% endif %}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Открыть карточку"
+                    aria-label="Открыть карточку клиента {{ client.company_name or client.full_name }}"
+                >
+                    &#128065;
+                </a>
+            </div>
+            <div>{{ client.tax_number }}</div>
+            <div>{{ client.company_name or client.full_name or 'Не указана' }}</div>
+            <div><span class="tag">{{ client.status }}</span></div>
+            <div class="comment-preview">{{ client.comments[-1].body if client.comments else 'Комментариев пока нет' }}</div>
+            <div class="comment-preview">{% for link in client.funnel_links %}{{ link.funnel.name }}{% if not loop.last %}, {% endif %}{% else %}Не назначена{% endfor %}</div>
+            <div class="row-date-cell">{{ client.next_call_date.strftime('%d.%m.%Y') if client.next_call_date else 'Не назначена' }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<div class="empty-state">{{ empty_message }}</div>
+{% endif %}
+{% endmacro %}

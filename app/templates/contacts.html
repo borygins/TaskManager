@@ -1,23 +1,5 @@
 {% extends "base.html" %}
-{% macro client_list(clients, show_date=true, empty_message='Клиентов нет.') %}
-    {% if clients %}
-    <div class="contact-table-scroll">
-        <div class="client-list-grid client-list-header{% if show_date %} client-list-with-date{% endif %}" aria-hidden="true">
-            <span>ИНН</span><span>Организация / ФИО</span><span>Телефон</span><span>Статус</span>
-            {% if show_date %}<span>Следующая дата</span>{% endif %}
-        </div>
-        {% for client in clients %}
-        <a class="client-list-grid client-list-row{% if show_date %} client-list-with-date{% endif %}" href="/clients/{{ client.id }}">
-            <span>{{ client.tax_number }}</span>
-            <strong>{{ client.company_name or client.full_name }}</strong>
-            <span>{{ client.phone or 'Телефон не указан' }}</span>
-            <span>{{ client.status }}</span>
-            {% if show_date %}<span>{{ client.next_call_date.strftime('%d.%m.%Y') if client.next_call_date else 'Не назначена' }}</span>{% endif %}
-        </a>
-        {% endfor %}
-    </div>
-    {% else %}<div class="empty-state">{{ empty_message }}</div>{% endif %}
-{% endmacro %}
+{% from "_client_list.html" import client_list %}
 {% block content %}
 <section class="hero compact">
     <div class="badge">Рабочий день</div>
@@ -59,15 +41,15 @@
             <div class="filter-actions"><button type="submit">Найти</button></div>
         </form>
     </div>
-    <p class="muted">План показывает текущие назначения. Нажмите на строку клиента, чтобы открыть карточку. История выполненных контактов за выбранную дату — ниже.</p>
+    <p class="muted">План показывает текущие назначения. Нажмите на глазик, чтобы открыть карточку клиента. История выполненных контактов за выбранную дату — ниже.</p>
     {% if q.strip() %}<h2>Результаты поиска</h2><p class="muted">До 100 клиентов. Для более точного поиска уточните запрос.</p>{{ client_list(found) }}{% endif %}
 </section>
 <section class="panel"><h2>Просроченные к {{ day.strftime('%d.%m.%Y') }} · {{ overdue|length }}</h2>{{ client_list(overdue) }}</section>
 <section class="panel"><h2>Назначено на {{ day.strftime('%d.%m.%Y') }} · {{ due|length }}</h2>{{ client_list(due) }}</section>
 <section class="panel" id="unscheduled-clients">
     <h2>Без следующей даты · {{ unscheduled|length }}</h2>
-    <p class="muted">Ваши незавершённые клиенты без назначенной следующей активности, независимо от выбранного дня. Нажмите на строку, чтобы открыть карточку клиента.</p>
-    {{ client_list(unscheduled, show_date=false, empty_message='Клиентов без следующей даты нет.') }}
+    <p class="muted">Ваши незавершённые клиенты без назначенной следующей активности, независимо от выбранного дня. Нажмите на глазик, чтобы открыть карточку клиента.</p>
+    {{ client_list(unscheduled, empty_message='Клиентов без следующей даты нет.') }}
 </section>
 <section class="panel"><h2>Журнал за день</h2>{% include '_contact_table.html' %}</section>
 {% endblock %}

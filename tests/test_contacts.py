@@ -195,6 +195,36 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Не назначена", text)
         self.assertNotIn("01.01.2000", text)
 
+    async def test_contacts_client_lists_use_shared_funnel_layout(self):
+        phone = "PHONE_MUST_NOT_APPEAR_IN_CLIENT_LIST"
+        comment = "Комментарий для общего списка"
+        async with self.factory() as session:
+            client = await session.get(Client, self.client.id)
+            client.phone = phone
+            client.next_call_date = self.today
+            session.add_all([
+                ClientFunnel(client_id=client.id, funnel_id=self.funnel.id),
+                Comment(client_id=client.id, author_id=self.manager.id, body=comment),
+            ])
+            await session.commit()
+
+        status, _, body = await self.request(
+            "GET", f"/contacts?day={self.today.isoformat()}&q={self.client.tax_number}",
+        )
+        self.assertEqual(status, 200)
+        text = body.decode()
+        search_results = re.search(r'<h2>Результаты поиска</h2>(.*?)</section>', text, re.S).group(1)
+        self.assertIn('class="row-list-head row-list-grid"', search_results)
+        self.assertRegex(
+            search_results,
+            rf'<div class="row-item row-list-grid">\s*<div class="row-eye-cell">\s*<a[^>]+href="/clients/{self.client.id}"',
+        )
+        self.assertIn("Последний комментарий", search_results)
+        self.assertIn(comment, search_results)
+        self.assertIn(self.funnel.name, search_results)
+        self.assertIn(self.today.strftime("%d.%m.%Y"), search_results)
+        self.assertNotIn(phone, text)
+
     async def unscheduled_section(self, day=None):
         status, _, body = await self.request("GET", f"/contacts?day={(day or self.today).isoformat()}")
         self.assertEqual(status, 200)
@@ -567,7 +597,7 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
             await session.commit()
         section = await self.unscheduled_section()
         self.assertIn("Клиентов без следующей даты нет.", section)
-        self.assertNotIn('class="client-list-grid client-list-row"', section)
+        self.assertNotIn('class="row-item row-list-grid"', section)
 
     async def test_final_statuses_leave_plans_but_client_can_be_reopened_by_activity(self):
         no_contacts = None

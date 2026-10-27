@@ -20,12 +20,6 @@
 .contact-table th, .contact-table td { padding: 12px; border: 1px solid var(--line); vertical-align: top; }
 .contact-table td { overflow-wrap: anywhere; }
 .contact-comment { min-width: 280px; white-space: pre-wrap; }
-.client-list-grid { display: grid; grid-template-columns: 150px minmax(220px, 2fr) minmax(160px, 1fr) minmax(180px, 1fr); min-width: 710px; font-size: 0.9rem; }
-.client-list-with-date { grid-template-columns: 150px minmax(220px, 2fr) minmax(160px, 1fr) minmax(180px, 1fr) 150px; min-width: 860px; }
-.client-list-grid > * { padding: 12px; border: 1px solid var(--line); overflow-wrap: anywhere; }
-.client-list-header { background: #126b36; font-weight: 600; }
-.client-list-row:hover, .client-list-row:focus-visible { background: rgba(53, 208, 255, 0.12); }
-.client-list-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 button:disabled { opacity: 0.65; cursor: wait; }
 .import-summary { margin-top: 20px; }
 
@@ -433,6 +427,10 @@ textarea {
 
 .row-list-panel {
     padding: 18px;
+    overflow-x: auto;
+}
+
+.client-row-list {
     overflow-x: auto;
 }
 

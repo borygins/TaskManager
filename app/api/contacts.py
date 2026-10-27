@@ -12,12 +12,13 @@ from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, get_manager_user
 from app.core.config import settings
 from app.core.sales import ACTIVITY_MARKS, CLIENT_STATUSES, FINAL_CLIENT_STATUSES
 from app.db.session import SessionLocal
-from app.models import Client, ContactActivity, ContactReportState, User
+from app.models import Client, ClientFunnel, ContactActivity, ContactReportState, User
 from app.services.contact_reports import (
     REPORT_HEADERS,
     build_contact_workbook,
@@ -167,7 +168,10 @@ async def contacts_page(request: Request, day: str | None = None, q: str = "", u
     selected_day = parse_day(day)
     async with SessionLocal() as session:
         rows = aggregate_contacts(await list_contacts(session, user.id, selected_day, selected_day))
-        base = select(Client).where(Client.assigned_manager_id == user.id)
+        base = select(Client).options(
+            selectinload(Client.comments),
+            selectinload(Client.funnel_links).joinedload(ClientFunnel.funnel),
+        ).where(Client.assigned_manager_id == user.id)
         active_base = base.where(Client.status.not_in(FINAL_CLIENT_STATUSES))
         due = list((await session.execute(active_base.where(Client.next_call_date == selected_day).order_by(Client.company_name))).scalars())
         overdue = list((await session.execute(active_base.where(Client.next_call_date < selected_day).order_by(Client.next_call_date, Client.company_name))).scalars())
