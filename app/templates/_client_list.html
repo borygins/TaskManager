@@ -1,4 +1,4 @@
-{% macro client_list(clients, empty_message='Клиентов нет.', funnel_id=None, search_query='', selected_status='', selected_next_call_date='') %}
+{% macro client_list(clients, empty_message='Клиентов нет.', funnel_id=None, search_query='', selected_status='', selected_next_call_date='', access_user=None, show_owner=false) %}
 {% if clients %}
 <div class="client-row-list">
     <div class="row-list-head row-list-grid">
@@ -12,8 +12,10 @@
     </div>
     <div class="row-list-body">
         {% for client in clients %}
+        {% set can_open = access_user is none or access_user.role == 'boss' or client.assigned_manager_id == access_user.id %}
         <div class="row-item row-list-grid">
             <div class="row-eye-cell">
+                {% if can_open %}
                 <a
                     class="eye-link"
                     href="/clients/{{ client.id }}{% if funnel_id %}?funnel_id={{ funnel_id }}&amp;q={{ search_query|urlencode }}&amp;status_filter={{ selected_status|urlencode }}&amp;next_call_date_filter={{ selected_next_call_date|urlencode }}{% endif %}"
@@ -24,9 +26,15 @@
                 >
                     &#128065;
                 </a>
+                {% else %}
+                <span class="blocked-client-icon" aria-label="Карточка недоступна">&#10005;</span>
+                {% endif %}
             </div>
             <div>{{ client.tax_number }}</div>
-            <div>{{ client.company_name or client.full_name or 'Не указана' }}</div>
+            <div>
+                {{ client.company_name or client.full_name or 'Не указана' }}
+                {% if show_owner %}<div class="client-owner">Ответственный: {{ client.assigned_manager.full_name if client.assigned_manager else 'Не назначен' }}</div>{% endif %}
+            </div>
             <div><span class="tag">{{ client.status }}</span></div>
             <div class="comment-preview">{{ client.comments[-1].body if client.comments else 'Комментариев пока нет' }}</div>
             <div class="comment-preview">{% for link in client.funnel_links %}{{ link.funnel.name }}{% if not loop.last %}, {% endif %}{% else %}Не назначена{% endfor %}</div>

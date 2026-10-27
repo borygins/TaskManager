@@ -6,6 +6,7 @@ from datetime import date
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.sales import CLIENT_STATUSES
 from app.models import Client, ClientFunnel, Funnel, User
@@ -73,7 +74,7 @@ async def create_client(session: AsyncSession, actor: User, data: NewClientInput
 async def search_clients(session: AsyncSession, actor: User, query: str = "", status: str = "",
                          funnel_id: int | None = None, owner: str = "", page: int = 1,
                          page_size: int = 50):
-    # Only directory fields: do not expose phones, notes or contact history of other managers.
+    # Phone numbers remain private in the directory; comments are shown as a short preview.
     conditions = []
     if term := query.strip().casefold():
         conditions.append(or_(
@@ -94,11 +95,12 @@ async def search_clients(session: AsyncSession, actor: User, query: str = "", st
     total = await session.scalar(select(func.count(Client.id)).where(*conditions))
     pages = max(1, (total + page_size - 1) // page_size)
     page = min(page, pages)
-    statement = select(
-        Client.id, Client.tax_number, Client.company_name, Client.full_name, Client.status,
-        Client.assigned_manager_id, User.full_name.label("manager_name"),
-    ).outerjoin(User, User.id == Client.assigned_manager_id).where(*conditions).order_by(
+    statement = select(Client).options(
+        joinedload(Client.assigned_manager),
+        selectinload(Client.comments),
+        selectinload(Client.funnel_links).joinedload(ClientFunnel.funnel),
+    ).where(*conditions).order_by(
         Client.company_name, Client.full_name, Client.id,
     ).offset((page - 1) * page_size).limit(page_size)
-    clients = (await session.execute(statement)).mappings().all()
+    clients = list((await session.execute(statement)).scalars().unique())
     return clients, total, page, pages

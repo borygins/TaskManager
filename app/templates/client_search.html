@@ -1,9 +1,10 @@
 {% extends "base.html" %}
+{% from "_client_list.html" import client_list %}
 {% block content %}
 <section class="hero compact">
     <div class="badge">Общая база</div>
     <h1>Поиск клиентов</h1>
-    <p class="muted">Поиск по ИНН, ФИО или названию организации, в том числе по части значения. Без фильтров показаны все клиенты.</p>
+    <p class="muted">Поиск по ИНН, ФИО или названию организации, в том числе по части значения. Для поиска выберите хотя бы один фильтр.</p>
     {% if current_user.role != 'boss' %}<p class="muted">Открыть можно только своих клиентов. Для остальных указан ответственный; для назначения обратитесь к руководителю.</p>{% endif %}
 </section>
 <section class="panel">
@@ -26,32 +27,18 @@
         <div class="filter-actions"><button type="submit">Найти</button><a class="secondary-link" href="/clients/search">Сбросить</a></div>
     </form>
 </section>
+{% if search_submitted and not has_filters %}<div class="hint" role="status">Укажите поисковый запрос или выберите хотя бы один фильтр.</div>{% endif %}
+{% if has_filters %}
 <section class="panel">
     <h2>Найдено клиентов: {{ total }}</h2>
+    {{ client_list(clients, empty_message='Клиенты не найдены. Измените запрос или сбросьте фильтры.', access_user=current_user, show_owner=true) }}
     {% if clients %}
-    <div class="contact-table-scroll">
-        <table class="contact-table">
-            <thead><tr><th>ИНН</th><th>Организация</th><th>ФИО</th><th>Статус</th><th>Ответственный</th><th>Карточка</th></tr></thead>
-            <tbody>
-            {% for client in clients %}
-            <tr>
-                <td>{{ client.tax_number }}</td><td>{{ client.company_name }}</td><td>{{ client.full_name }}</td><td>{{ client.status }}</td>
-                <td>{{ client.manager_name or 'Не назначен' }}</td>
-                <td>{% if current_user.role == 'boss' or client.assigned_manager_id == current_user.id %}
-                    <a class="secondary-link" href="/clients/{{ client.id }}">Открыть</a>
-                    {% elif client.assigned_manager_id %}<span class="muted">Доступ только ответственному и руководителю</span>
-                    {% else %}<span class="muted">Для назначения обратитесь к руководителю</span>{% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
     <nav class="actions contact-actions" aria-label="Страницы результатов">
         {% if previous_url %}<a class="secondary-link" href="{{ previous_url }}">Назад</a>{% endif %}
         <p class="muted">Страница {{ page }} из {{ pages }} · по 50 клиентов</p>
         {% if next_url %}<a class="secondary-link" href="{{ next_url }}">Далее</a>{% endif %}
     </nav>
-    {% else %}<div class="empty-state">Клиенты не найдены. Измените запрос или сбросьте фильтры.</div>{% endif %}
+    {% endif %}
 </section>
+{% endif %}
 {% endblock %}

@@ -23,10 +23,15 @@ async def client_search(request: Request, q: str = Query("", max_length=255),
                         funnel_id: str = Query("", pattern=r"^(?:|[1-9][0-9]{0,17})$"),
                         owner: str = Query("", pattern=r"^(?:|mine|unassigned|[1-9][0-9]{0,17})$"),
                         page: int = Query(1, ge=1), user: User = Depends(get_current_user)):
+    search_submitted = any(name in request.query_params for name in ("q", "status", "funnel_id", "owner"))
+    has_filters = bool(q.strip() or status or funnel_id or owner)
     async with SessionLocal() as session:
-        clients, total, page, pages = await search_clients(
-            session, user, q, status, int(funnel_id) if funnel_id else None, owner, page,
-        )
+        if has_filters:
+            clients, total, page, pages = await search_clients(
+                session, user, q, status, int(funnel_id) if funnel_id else None, owner, page,
+            )
+        else:
+            clients, total, page, pages = [], 0, 1, 1
         funnels = list((await session.scalars(select(Funnel).order_by(Funnel.name))).all())
         managers = list((await session.scalars(select(User).where(or_(
             User.role == "manager", User.clients.any(),
@@ -36,6 +41,7 @@ async def client_search(request: Request, q: str = Query("", max_length=255),
     return render(request, "client_search.html", {
         "current_user": user, "clients": clients, "total": total, "page": page, "pages": pages,
         "filters": filters, "funnels": funnels, "managers": managers, "statuses": statuses,
+        "has_filters": has_filters, "search_submitted": search_submitted,
         "previous_url": "/clients/search?" + urlencode({**filters, "page": page - 1}) if page > 1 else None,
         "next_url": "/clients/search?" + urlencode({**filters, "page": page + 1}) if page < pages else None,
     })

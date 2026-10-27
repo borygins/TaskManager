@@ -526,41 +526,6 @@ async def bulk_assign_distribution(
     return RedirectResponse(redirect_url, status_code=status.HTTP_303_SEE_OTHER)
 
 
-@app.post("/boss/distribution/{client_id}/assign")
-async def assign_client_to_manager(
-    request: Request,
-    client_id: int,
-    current_user: User = Depends(get_boss_user),
-) -> RedirectResponse:
-    form = await request.form()
-    async with SessionLocal() as session:
-        user = await session.get(User, current_user.id)
-        client = await get_client_with_details(client_id=client_id, session=session)
-        if not client:
-            raise HTTPException(status_code=404, detail="Клиент не найден.")
-        await update_client_task(
-            client=client,
-            form_data={"assigned_manager_id": str(form.get("assigned_manager_id", ""))},
-            actor=user,
-            session=session,
-        )
-        await session.commit()
-
-    query = {
-        key: value
-        for key, value in {
-            "q": str(form.get("search_query", "")).strip(),
-            "status_filter": str(form.get("selected_status", "")).strip(),
-            "manager_id": str(form.get("selected_manager_id", "")).strip(),
-        }.items()
-        if value
-    }
-    redirect_url = "/boss/distribution"
-    if query:
-        redirect_url = f"{redirect_url}?{urlencode(query)}"
-    return RedirectResponse(redirect_url, status_code=status.HTTP_303_SEE_OTHER)
-
-
 @app.post("/clients/{client_id}/save")
 async def save_client(
     request: Request,

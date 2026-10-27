@@ -493,6 +493,22 @@ textarea {
     font-size: 1.15rem;
 }
 
+.blocked-client-icon {
+    display: inline-grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    color: var(--muted);
+}
+
+.client-owner {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
 .comment-preview {
     color: var(--muted);
     white-space: nowrap;

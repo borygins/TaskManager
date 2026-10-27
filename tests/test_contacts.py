@@ -256,16 +256,52 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 status, _, body = await self.request("GET", "/clients/search")
                 self.assertEqual(status, 200)
                 text = body.decode()
+                self.assertNotIn("Найдено клиентов:", text)
+                self.assertNotIn(self.client.tax_number, text)
+
+                status, _, body = await self.request(
+                    "GET", "/clients/search?" + urlencode({"status": CLIENT_STATUSES[0]}),
+                )
+                self.assertEqual(status, 200)
+                text = body.decode()
                 self.assertIn("Найдено клиентов: 4", text)
                 self.assertIn(self.other.full_name, text)
                 self.assertNotIn("PRIVATE_PHONE_SENTINEL", text)
-                self.assertNotIn("PRIVATE_NOTES_SENTINEL", text)
+                self.assertIn("PRIVATE_NOTES_SENTINEL", text)
+                self.assertNotIn("Доступ только ответственному", text)
                 for target in (self.client, self.other_client, unassigned):
                     self.assertIn(target.tax_number, text)
                     allowed = user.role == "boss" or target.assigned_manager_id == user.id
                     self.assertEqual(f'href="/clients/{target.id}"' in text, allowed)
                     card_status, _, _ = await self.request("GET", f"/clients/{target.id}")
                     self.assertEqual(card_status, 200 if allowed else 403)
+                if user.role == "boss":
+                    self.assertNotIn('class="blocked-client-icon"', text)
+                else:
+                    self.assertEqual(text.count('class="blocked-client-icon"'), 2)
+                    self.assertIn(f"Ответственный: {self.other.full_name}", text)
+
+    async def test_boss_distribution_uses_shared_rows_without_single_assignment_form(self):
+        comment = "Комментарий в распределении"
+        async with self.factory() as session:
+            session.add_all([
+                ClientFunnel(client_id=self.client.id, funnel_id=self.funnel.id),
+                Comment(client_id=self.client.id, author_id=self.manager.id, body=comment),
+            ])
+            await session.commit()
+        self.active_user = self.boss
+        with patch("app.main.SessionLocal", self.factory):
+            status, _, body = await self.request("GET", "/boss/distribution")
+        self.assertEqual(status, 200)
+        text = body.decode()
+        self.assertIn('class="row-list-head row-list-grid"', text)
+        self.assertIn(f'href="/clients/{self.client.id}"', text)
+        self.assertIn(comment, text)
+        self.assertIn(self.funnel.name, text)
+        self.assertIn(f"Ответственный: {self.manager.full_name}", text)
+        self.assertIn('name="bulk_assigned_manager_id"', text)
+        self.assertNotIn('name="assigned_manager_id"', text)
+        self.assertNotIn(f'action="/boss/distribution/{self.client.id}/assign"', text)
 
     async def test_global_search_matches_inn_cyrillic_name_and_company(self):
         for query, expected in (
@@ -313,13 +349,13 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         status, _, body = await self.request("GET", "/clients/search?" + urlencode(query))
         self.assertEqual(status, 200)
         self.assertIn("Найдено клиентов: 55", body.decode())
-        self.assertEqual(body.decode().count('>Открыть</a>'), 50)
+        self.assertEqual(body.decode().count('class="eye-link"'), 50)
         next_url = html.unescape(re.search(r'href="([^"]+)">Далее</a>', body.decode()).group(1))
         self.assertIn("owner=mine", next_url)
         self.assertIn("q=", next_url)
         status, _, body = await self.request("GET", next_url)
         self.assertEqual(status, 200)
-        self.assertEqual(body.decode().count('>Открыть</a>'), 5)
+        self.assertEqual(body.decode().count('class="eye-link"'), 5)
         self.assertIn("Страница 2 из 2", body.decode())
         for invalid in ("page=0", "owner=bad", "funnel_id=-1"):
             status, _, _ = await self.request("GET", f"/clients/search?{invalid}")
