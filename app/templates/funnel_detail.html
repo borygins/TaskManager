@@ -37,23 +37,17 @@
 
 <section class="panel row-list-panel">
     <div class="row-list-head row-list-grid">
+        <div class="row-eye-cell row-eye-heading">Карточка</div>
         <div>ИНН</div>
         <div>Организация</div>
         <div>Статус</div>
         <div>Последний комментарий</div>
         <div>Воронка продаж</div>
-        <div>Последняя активность</div>
-        <div class="row-eye-cell">Карточка</div>
+        <div class="row-date-cell">Следующая дата звонка</div>
     </div>
     <div class="row-list-body">
         {% for client in clients %}
         <div class="row-item row-list-grid">
-            <div>{{ client.tax_number }}</div>
-            <div>{{ client.company_name or 'Не указана' }}</div>
-            <div><span class="tag">{{ client.status }}</span></div>
-            <div class="comment-preview">{{ client.comments[-1].body if client.comments else 'Комментариев пока нет' }}</div>
-            <div class="comment-preview">{% for link in client.funnel_links %}{{ link.funnel.name }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
-            <div>{{ client.last_manager_activity_date.strftime('%d.%m.%Y') if client.last_manager_activity_date else 'Нет активности' }}</div>
             <div class="row-eye-cell">
                 <a
                     class="eye-link"
@@ -65,6 +59,12 @@
                     &#128065;
                 </a>
             </div>
+            <div>{{ client.tax_number }}</div>
+            <div>{{ client.company_name or 'Не указана' }}</div>
+            <div><span class="tag">{{ client.status }}</span></div>
+            <div class="comment-preview">{{ client.comments[-1].body if client.comments else 'Комментариев пока нет' }}</div>
+            <div class="comment-preview">{% for link in client.funnel_links %}{{ link.funnel.name }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
+            <div class="row-date-cell">{{ client.next_call_date.strftime('%d.%m.%Y') if client.next_call_date else 'Не назначена' }}</div>
         </div>
         {% else %}
         <div class="empty-state">По заданным фильтрам клиенты не найдены.</div>

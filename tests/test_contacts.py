@@ -166,6 +166,35 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(text.count("Ответственный"), 2 if user.role == "boss" else 1)
                 self.assertNotIn(f'<h2>{self.client.full_name}</h2>', text)
 
+    async def test_funnel_rows_start_with_card_link_and_show_next_call_date(self):
+        async with self.factory() as session:
+            first = await session.get(Client, self.client.id)
+            first.next_call_date = self.today
+            first.last_manager_activity_date = date(2000, 1, 1)
+            second = await session.get(Client, self.second_client.id)
+            second.next_call_date = None
+            session.add_all([
+                ClientFunnel(client_id=first.id, funnel_id=self.funnel.id),
+                ClientFunnel(client_id=second.id, funnel_id=self.funnel.id),
+            ])
+            await session.commit()
+
+        with patch("app.main.SessionLocal", self.factory):
+            status, _, body = await self.request("GET", f"/funnels/{self.funnel.id}")
+        self.assertEqual(status, 200)
+        text = body.decode()
+        header = re.search(r'<div class="row-list-head row-list-grid">(.*?)</div>\s*<div class="row-list-body">', text, re.S).group(1)
+        self.assertLess(header.index("Карточка"), header.index("ИНН"))
+        self.assertIn("Следующая дата звонка", header)
+        self.assertNotIn("Последняя активность", header)
+        self.assertRegex(
+            text,
+            r'<div class="row-item row-list-grid">\s*<div class="row-eye-cell">\s*<a[^>]+class="eye-link"',
+        )
+        self.assertIn(self.today.strftime("%d.%m.%Y"), text)
+        self.assertIn("Не назначена", text)
+        self.assertNotIn("01.01.2000", text)
+
     async def unscheduled_section(self, day=None):
         status, _, body = await self.request("GET", f"/contacts?day={(day or self.today).isoformat()}")
         self.assertEqual(status, 200)

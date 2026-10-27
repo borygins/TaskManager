@@ -433,12 +433,18 @@ textarea {
 
 .row-list-panel {
     padding: 18px;
+    overflow-x: auto;
 }
 
 .row-list-head {
     padding: 0 14px 12px;
     color: var(--muted);
     font-size: 0.85rem;
+}
+
+.row-list-head,
+.row-list-body {
+    min-width: 1236px;
 }
 
 .row-list-body {
@@ -449,7 +455,14 @@ textarea {
 
 .row-list-grid {
     display: grid;
-    grid-template-columns: 1.1fr 1.4fr 0.9fr 1.8fr 1.5fr 1fr 72px;
+    grid-template-columns:
+        56px
+        150px
+        minmax(190px, 1.2fr)
+        minmax(150px, 0.8fr)
+        minmax(230px, 1.8fr)
+        minmax(180px, 1.1fr)
+        180px;
     gap: 12px;
     align-items: center;
 }
@@ -464,6 +477,15 @@ textarea {
 .row-eye-cell {
     display: flex;
     justify-content: center;
+}
+
+.row-eye-heading {
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.row-date-cell {
+    white-space: nowrap;
 }
 
 .eye-link {
@@ -523,7 +545,6 @@ textarea {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .row-list-grid,
     .user-row-grid {
         grid-template-columns: 1fr;
     }
@@ -549,6 +570,11 @@ textarea {
     .row-list-grid,
     .user-row-grid {
         grid-template-columns: 1fr;
+    }
+
+    .row-list-head,
+    .row-list-body {
+        min-width: 0;
     }
 
     .row-eye-cell {
