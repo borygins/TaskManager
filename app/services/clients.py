@@ -43,12 +43,12 @@ def parse_new_client(form: dict[str, str]) -> NewClientInput:
     if not company_name:
         raise ValueError("Укажите название организации или ФИО индивидуального предпринимателя.")
     if len(company_name) > 255 or len(full_name) > 255 or len(phone) > 64:
-        raise ValueError("Название и ФИО — до 255 символов, телефон — до 64 символов.")
+        raise ValueError("Название и ЛПР — до 255 символов, телефон — до 64 символов.")
     try:
         funnel_id = int(form.get("funnel_id", ""))
     except ValueError as exc:
         raise ValueError("Выберите воронку из списка.") from exc
-    return NewClientInput(tax_number, company_name, full_name or company_name, phone, funnel_id)
+    return NewClientInput(tax_number, company_name, full_name, phone, funnel_id)
 
 
 async def create_client(session: AsyncSession, actor: User, data: NewClientInput) -> Client:

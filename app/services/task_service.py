@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlsplit
 
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,25 @@ def parse_decimal(raw_value: str | None) -> Decimal | None:
         return Decimal(normalized)
     except InvalidOperation:
         return None
+
+
+def parse_limited_text(raw_value: str | None, label: str, max_length: int) -> str:
+    value = (raw_value or "").strip()
+    if len(value) > max_length:
+        raise ValueError(f"{label}: не более {max_length} символов.")
+    return value
+
+
+def parse_profile_url(raw_value: str | None) -> str:
+    value = parse_limited_text(raw_value, "Ссылка на профиль", 2048)
+    if not value:
+        return ""
+    parsed = urlsplit(value)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("Ссылка на профиль должна начинаться с http:// или https://.")
+    if any(ord(character) < 32 for character in value):
+        raise ValueError("Ссылка на профиль содержит недопустимые символы.")
+    return value
 
 
 def build_change_message(label: str, old_value: object, new_value: object) -> str:
@@ -191,6 +211,7 @@ async def update_client_task(
     if "status" in form_data:
         raise ValueError("Статус клиента изменяется только при сохранении активности.")
     tracked_fields = [
+        ("full_name", "full_name", "ЛПР", lambda value: parse_limited_text(value, "ЛПР", 255)),
         ("phone", "phone", "Телефон", lambda value: value.strip()),
         ("last_call_date", "last_call_date", "Дата звонка", parse_optional_date),
         ("next_call_date", "next_call_date", "Следующая дата звонка", parse_optional_date),
@@ -199,6 +220,7 @@ async def update_client_task(
         ("mcc_code", "mcc_code", "MCC", lambda value: value.strip()),
         ("competitor_bank", "competitor_bank", "Банк-конкурент", lambda value: value.strip()),
         ("registration_address", "registration_address", "Адрес регистрации", lambda value: value.strip()),
+        ("profile_url", "profile_url", "Ссылка на профиль", parse_profile_url),
     ]
 
     changes: list[str] = []
@@ -296,7 +318,7 @@ async def get_dashboard_stats(current_user: User, session: AsyncSession) -> dict
 def client_to_export_row(client: Client) -> dict[str, str]:
     funnel_names = ", ".join(sorted(link.funnel.name for link in client.funnel_links))
     return {
-        "ФИО": client.full_name,
+        "ЛПР": client.full_name,
         "Организация": client.company_name,
         "ИНН": client.tax_number,
         "Телефон": client.phone,

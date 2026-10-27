@@ -11,7 +11,7 @@
     <div>
         <div class="badge">Карточка клиента</div>
         <h1>{{ client.company_name or 'Организация не указана' }} • ИНН {{ client.tax_number }}</h1>
-        <p class="muted">Директор: {{ client.full_name }}</p>
+        <p class="muted">ЛПР: {{ client.full_name or 'Не указан' }}</p>
         <div class="client-header-meta">
             <div class="client-funnels" aria-label="Воронки клиента">
                 <span class="muted">Воронки</span>
@@ -28,9 +28,10 @@
                 <span class="tag">{{ client.assigned_manager.full_name if client.assigned_manager else 'Не назначен' }}</span>
             </div>
         </div>
-        {% if current_user.role == 'manager' %}
-        <a class="secondary-link" href="/clients/{{ client.id }}/contacts/new">Активность</a>
-        {% endif %}
+        <div class="actions contact-actions">
+            {% if client.profile_url %}<a class="secondary-link" href="{{ client.profile_url }}" target="_blank" rel="noopener noreferrer">Перейти в профиль</a>{% endif %}
+            {% if current_user.role == 'manager' %}<a class="secondary-link" href="/clients/{{ client.id }}/contacts/new">Активность</a>{% endif %}
+        </div>
     </div>
     {% if funnel_id %}
     <a class="secondary-link" href="/funnels/{{ funnel_id }}?q={{ search_query|urlencode }}&status_filter={{ selected_status|urlencode }}&next_call_date_filter={{ selected_next_call_date|urlencode }}">Вернуться в воронку</a>
@@ -53,6 +54,14 @@
     </div>
 
     <div class="form-grid">
+        <label>
+            <span>ЛПР</span>
+            <input type="text" name="full_name" maxlength="255" value="{{ client.full_name or '' }}">
+        </label>
+        <label>
+            <span>Ссылка на профиль</span>
+            <input type="url" name="profile_url" maxlength="2048" value="{{ client.profile_url or '' }}" placeholder="https://...">
+        </label>
         <label>
             <span>Телефон</span>
             <input type="text" name="phone" value="{{ client.phone or '' }}">

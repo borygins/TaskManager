@@ -4,12 +4,12 @@
 <section class="hero compact">
     <div class="badge">Общая база</div>
     <h1>Поиск клиентов</h1>
-    <p class="muted">Поиск по ИНН, ФИО или названию организации, в том числе по части значения. Для поиска выберите хотя бы один фильтр.</p>
+    <p class="muted">Поиск по ИНН, ЛПР или названию организации, в том числе по части значения. Для поиска выберите хотя бы один фильтр.</p>
     {% if current_user.role != 'boss' %}<p class="muted">Открыть можно только своих клиентов. Для остальных указан ответственный; для назначения обратитесь к руководителю.</p>{% endif %}
 </section>
 <section class="panel">
     <form method="get" action="/clients/search" class="filter-grid">
-        <label><span>ИНН, ФИО или организация</span><input type="search" name="q" maxlength="255" value="{{ filters.q }}" placeholder="Введите ИНН, ФИО или название"></label>
+        <label><span>ИНН, ЛПР или организация</span><input type="search" name="q" maxlength="255" value="{{ filters.q }}" placeholder="Введите ИНН, ЛПР или название"></label>
         <label><span>Статус</span><select name="status">
             <option value="">Все статусы</option>
             {% for status in statuses %}<option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}

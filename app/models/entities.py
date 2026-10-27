@@ -56,7 +56,7 @@ class Client(Base):
     __tablename__ = "clients"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    full_name: Mapped[str] = mapped_column(String(255), index=True)
+    full_name: Mapped[str] = mapped_column(String(255), default="", index=True)
     company_name: Mapped[str] = mapped_column(String(255), default="")
     tax_number: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     phone: Mapped[str] = mapped_column(String(64), default="")
@@ -68,6 +68,7 @@ class Client(Base):
     mcc_code: Mapped[str] = mapped_column(String(32), default="")
     competitor_bank: Mapped[str] = mapped_column(String(255), default="")
     registration_address: Mapped[str] = mapped_column(String(500), default="")
+    profile_url: Mapped[str] = mapped_column(String(2048), default="")
     assigned_manager_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

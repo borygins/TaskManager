@@ -4,7 +4,7 @@
     <div>
         <div class="badge">Активность</div>
         <h1>{{ client.company_name or 'Организация не указана' }} • ИНН {{ client.tax_number }}</h1>
-        <p class="muted">Директор: {{ client.full_name }}</p>
+        <p class="muted">ЛПР: {{ client.full_name or 'Не указан' }}</p>
         <div class="client-header-meta">
             <div class="client-funnels" aria-label="Воронки клиента">
                 <span class="muted">Воронки</span>

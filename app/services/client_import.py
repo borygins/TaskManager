@@ -23,14 +23,14 @@ from app.services.task_service import append_daily_activity
 
 MAX_FILE_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 5000
-IMPORT_POLICY_VERSION = 6
+IMPORT_POLICY_VERSION = 8
 FIELDS = {
-    "ФИО": "full_name", "Организация": "company_name", "Телефон": "phone",
+    "ЛПР": "full_name", "Организация": "company_name", "Телефон": "phone",
     "Дата звонка": "last_call_date", "Следующая дата звонка": "next_call_date",
     "Статус": "status", POTENTIAL_TURNOVER_LABEL: "monthly_turnover", "MCC": "mcc_code",
     "Банк-конкурент": "competitor_bank", "Адрес регистрации": "registration_address",
 }
-HEADER_ALIASES = {"Оборот в месяц": POTENTIAL_TURNOVER_LABEL}
+HEADER_ALIASES = {"ФИО": "ЛПР", "Оборот в месяц": POTENTIAL_TURNOVER_LABEL}
 DATES = {"last_call_date", "next_call_date"}
 PROTECTED = DATES | {"status", "phone", "full_name", "company_name"}
 LABELS = {value: key for key, value in FIELDS.items()} | {
@@ -228,7 +228,7 @@ async def build_plan(session: AsyncSession, source: dict) -> dict:
             row["error"] = "Табельный номер не соответствует действующему менеджеру."
             continue
         if not client and not (incoming.get("company_name") or incoming.get("full_name")):
-            row["error"] = "Для нового клиента укажите организацию или ФИО."
+            row["error"] = "Для нового клиента укажите организацию или ЛПР."
             continue
         if "status" in incoming and incoming["status"] not in CLIENT_STATUS_SET:
             row["error"] = "Неизвестный статус клиента."
@@ -244,7 +244,7 @@ async def build_plan(session: AsyncSession, source: dict) -> dict:
             "comments": sorted((c.id, c.body) for c in client.comments) if client else [],
         })
         if not client:
-            incoming.setdefault("full_name", incoming.get("company_name", ""))
+            incoming.setdefault("full_name", "")
             incoming.setdefault("status", CLIENT_STATUSES[0])
         for field in FIELDS.values():
             if field not in incoming:

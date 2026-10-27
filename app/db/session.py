@@ -66,6 +66,12 @@ async def init_db() -> None:
                 "python scripts/migrate_statuses.py --database task_manager.sqlite3 "
                 "(или укажите путь к своей базе). Инструкция: docs/STATUS_MIGRATION.md"
             )
+        if old_clients and "profile_url" not in old_clients:
+            raise RuntimeError(
+                "Требуется миграция ссылки на профиль. Остановите приложение и выполните "
+                "python scripts/migrate_profile_url.py --database task_manager.sqlite3 "
+                "(или укажите путь к своей базе). Инструкция: docs/PROFILE_URL_MIGRATION.md"
+            )
         await connection.run_sync(Base.metadata.create_all)
 
         client_columns = {row[1] for row in (await connection.execute(text("PRAGMA table_info(clients)"))).fetchall()}

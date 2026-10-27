@@ -6,7 +6,7 @@
         <div class="badge">Воронка</div>
         <h1>{{ funnel.name }}</h1>
         <a class="secondary-link" href="/clients/new?funnel_id={{ funnel.id }}">Добавить клиента</a>
-        <p class="muted">Список клиентов можно быстро найти по ИНН, ФИО или организации и отфильтровать по статусу и дате звонка.</p>
+        <p class="muted">Список клиентов можно быстро найти по ИНН, ЛПР или организации и отфильтровать по статусу и дате звонка.</p>
     </div>
 </section>
 
@@ -14,7 +14,7 @@
     <form method="get" class="filter-grid filter-grid-wide">
         <label>
             <span>Поиск клиента</span>
-            <input type="search" name="q" value="{{ search_query }}" placeholder="ИНН, ФИО или организация">
+            <input type="search" name="q" value="{{ search_query }}" placeholder="ИНН, ЛПР или организация">
         </label>
         <label>
             <span>Фильтр по статусу</span>

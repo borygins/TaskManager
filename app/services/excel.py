@@ -13,7 +13,7 @@ from app.models import Client, ClientFunnel
 from app.services.task_service import client_to_export_row
 
 EXPORT_HEADERS = [
-    "ФИО",
+    "ЛПР",
     "Организация",
     "ИНН",
     "Телефон",

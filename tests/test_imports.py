@@ -128,7 +128,7 @@ class ImportTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(set(names), {"Спарк", "Новая"})
             new = await session.scalar(select(Client).where(Client.tax_number == "001111111111"))
             self.assertIsNone(new.assigned_manager_id)
-            self.assertEqual(new.full_name, "Новый клиент")
+            self.assertEqual(new.full_name, "")
             self.assertEqual(str(new.monthly_turnover), "123.45")
             self.assertEqual(await session.scalar(select(func.count(Comment.id))), 3)
             self.assertEqual(await session.scalar(select(func.count(Comment.id)).where(Comment.source == "import")), 2)
@@ -265,11 +265,10 @@ class ImportTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await session.scalar(select(Comment.body).where(Comment.client_id == client.id)), "Новая информация")
             workbook = load_workbook(BytesIO(await export_clients_to_workbook(session)))
             headers = [cell.value for cell in workbook.active[1]]
+            self.assertNotIn("Ссылка на профиль", headers)
             exported = [dict(zip(headers, row)) for row in workbook.active.iter_rows(min_row=2, values_only=True)]
-            self.assertEqual(
-                next(row for row in exported if row["ИНН"] == self.client.tax_number)[POTENTIAL_TURNOVER_LABEL],
-                "123.45",
-            )
+            exported_client = next(row for row in exported if row["ИНН"] == self.client.tax_number)
+            self.assertEqual(exported_client[POTENTIAL_TURNOVER_LABEL], "123.45")
             workbook.close()
 
     async def test_protected_empty_names_can_be_filled(self):
@@ -505,6 +504,9 @@ class ImportTests(unittest.IsolatedAsyncioTestCase):
         workbook = load_workbook(BytesIO(content))
         headers = [c.value for c in workbook.active[1]]
         self.assertNotIn("ФИО менеджера", headers)
+        self.assertIn("ЛПР", headers)
+        self.assertNotIn("ФИО", headers)
+        self.assertNotIn("Ссылка на профиль", headers)
         self.assertNotIn("Дата последней активности менеджера", headers)
         self.assertIn(POTENTIAL_TURNOVER_LABEL, headers)
         self.assertNotIn("Оборот в месяц", headers)

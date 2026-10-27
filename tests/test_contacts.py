@@ -116,7 +116,7 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('name="client_status"', text)
         self.assertIn('name="mark_missed_call"', text)
         self.assertIn(f'<h1>{expected_client.company_name} • ИНН {expected_client.tax_number}</h1>', text)
-        self.assertIn(f'<p class="muted">Директор: {expected_client.full_name}</p>', text)
+        self.assertIn(f'<p class="muted">ЛПР: {expected_client.full_name}</p>', text)
         self.assertIn(f'<span class="tag">{self.manager.full_name}</span>', text)
         async with self.factory() as session:
             current_status = (await session.get(Client, client_id)).status
@@ -143,8 +143,10 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         async with self.factory() as session:
             return aggregate_contacts(await list_contacts(session, manager_id or self.manager.id, start or self.today, end or self.today))
 
-    async def test_client_card_displays_company_and_inn_above_director(self):
+    async def test_client_card_displays_company_inn_lpr_and_profile_link(self):
         async with self.factory() as session:
+            client = await session.get(Client, self.client.id)
+            client.profile_url = "https://profile.example/clients/1"
             session.add(ClientFunnel(client_id=self.client.id, funnel_id=self.funnel.id))
             await session.commit()
         with patch("app.main.SessionLocal", self.factory):
@@ -156,15 +158,45 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 title = f"{self.client.company_name} • ИНН {self.client.tax_number}"
                 self.assertIn(f'<h1>{title}</h1>', text)
                 self.assertEqual(text.count(title), 1)
-                self.assertIn(f'<p class="muted">Директор: {self.client.full_name}</p>', text)
+                self.assertIn(f'<p class="muted">ЛПР: {self.client.full_name}</p>', text)
+                self.assertIn(f'name="full_name" maxlength="255" value="{self.client.full_name}"', text)
+                self.assertIn('name="profile_url" maxlength="2048" value="https://profile.example/clients/1"', text)
+                self.assertIn('href="https://profile.example/clients/1" target="_blank" rel="noopener noreferrer">Перейти в профиль</a>', text)
                 self.assertNotIn('name="status"', text)
                 self.assertIn("Потенциал оборота в месяц", text)
                 self.assertNotIn("Обороты в месяц", text)
-                self.assertEqual(text.count(f"Директор: {self.client.full_name}"), 1)
+                self.assertEqual(text.count(f"ЛПР: {self.client.full_name}"), 1)
                 self.assertIn('aria-label="Воронки клиента"', text)
                 self.assertIn(f'<span class="tag accent">{self.funnel.name}</span>', text)
                 self.assertEqual(text.count("Ответственный"), 2 if user.role == "boss" else 1)
                 self.assertNotIn(f'<h2>{self.client.full_name}</h2>', text)
+                if user.role == "manager":
+                    self.assertLess(text.index("Перейти в профиль"), text.index(">Активность</a>"))
+                else:
+                    self.assertNotIn(">Активность</a>", text)
+
+    async def test_client_card_saves_lpr_and_validates_profile_url(self):
+        with patch("app.main.SessionLocal", self.factory):
+            status, _, _ = await self.request("POST", f"/clients/{self.client.id}/save", {
+                "full_name": "Петров Пётр Петрович",
+                "profile_url": "https://profile.example/client/001234567890",
+            })
+            self.assertEqual(status, 303)
+            status, _, body = await self.request("GET", f"/clients/{self.client.id}")
+            self.assertEqual(status, 200)
+            text = body.decode()
+            self.assertIn("ЛПР: Петров Пётр Петрович", text)
+            self.assertIn('href="https://profile.example/client/001234567890"', text)
+
+            status, _, _ = await self.request("POST", f"/clients/{self.client.id}/save", {
+                "profile_url": "javascript:alert(1)",
+            })
+            self.assertEqual(status, 400)
+
+        async with self.factory() as session:
+            client = await session.get(Client, self.client.id)
+            self.assertEqual(client.full_name, "Петров Пётр Петрович")
+            self.assertEqual(client.profile_url, "https://profile.example/client/001234567890")
 
     async def test_funnel_rows_start_with_card_link_and_show_next_call_date(self):
         async with self.factory() as session:
@@ -827,7 +859,7 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status, 303)
         async with self.factory() as session:
             client = (await session.execute(select(Client).where(Client.tax_number == fields["tax_number"]))).scalar_one()
-            self.assertEqual(client.full_name, fields["company_name"])
+            self.assertEqual(client.full_name, "")
 
     async def test_new_client_requires_csrf_and_authentication(self):
         fields = await self.new_client_fields(csrf_token="wrong")
@@ -1163,6 +1195,15 @@ class ContactWorkflowTests(unittest.IsolatedAsyncioTestCase):
         async with self.engine.begin() as connection:
             await connection.execute(text("ALTER TABLE clients ADD COLUMN manager_notes TEXT"))
         with patch("app.db.session.engine", self.engine), self.assertRaisesRegex(RuntimeError, "migrate_comments.py"):
+            await init_db()
+
+    async def test_startup_rejects_database_without_profile_url_migration(self):
+        from sqlalchemy import text
+        from app.db.session import init_db
+
+        async with self.engine.begin() as connection:
+            await connection.execute(text("ALTER TABLE clients DROP COLUMN profile_url"))
+        with patch("app.db.session.engine", self.engine), self.assertRaisesRegex(RuntimeError, "migrate_profile_url.py"):
             await init_db()
 
 
